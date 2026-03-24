@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFileById, updateFileStatus } from "@/lib/db";
-import { appendToSheet, getLastRowNumber } from "@/lib/google-sheets";
+import { appendToSheet, getLastRowNumber, extractSpreadsheetId } from "@/lib/google-sheets";
 import { OvertimeEntry, toSheetRow } from "@/lib/pdf-parser";
 import { unlink } from "fs/promises";
 
@@ -26,6 +26,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sheetId = extractSpreadsheetId(spreadsheetId);
+
     // Collect all entries from parsed files
     const allEntries: OvertimeEntry[] = [];
 
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get last row number for auto-increment
-    const lastRowNumber = await getLastRowNumber(spreadsheetId, sheetName);
+    const lastRowNumber = await getLastRowNumber(sheetId, sheetName);
 
     // Build sheet rows with auto-incremented 연번
     const sheetRows = allEntries.map((entry, idx) =>
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Append to Google Sheet
-    const result = await appendToSheet(spreadsheetId, sheetName, sheetRows);
+    const result = await appendToSheet(sheetId, sheetName, sheetRows);
 
     // Clean up: delete PDF files and update status
     for (const id of fileIds) {

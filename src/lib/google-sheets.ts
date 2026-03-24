@@ -4,6 +4,18 @@ import path from "path";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
+/**
+ * Extract spreadsheet ID from a full URL or raw ID.
+ * Handles: full URL, /d/ID/edit..., or just the ID itself.
+ */
+export function extractSpreadsheetId(input: string): string {
+  const trimmed = input.trim();
+  const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  // Already a plain ID (no slashes)
+  return trimmed.split(/[/?#]/)[0];
+}
+
 function getAuth() {
   const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE;
 
