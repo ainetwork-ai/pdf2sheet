@@ -68,7 +68,7 @@ export async function findFirstEmptyRow(
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${sheetName}!B${MIN_DATA_ROW}:B`,
+    range: `${sheetName}!C${MIN_DATA_ROW}:C`,
   });
 
   const values = response.data.values;
@@ -98,7 +98,7 @@ export async function writeToSheet(
   const sheets = google.sheets({ version: "v4", auth });
 
   const endRow = startRow + values.length - 1;
-  const range = `${sheetName}!B${startRow}:L${endRow}`;
+  const range = `${sheetName}!C${startRow}:M${endRow}`;
 
   const response = await sheets.spreadsheets.values.update({
     spreadsheetId,

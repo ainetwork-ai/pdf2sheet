@@ -495,7 +495,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="mb-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
-                5행부터 B열(이름)이 비어있는 첫 번째 행에 데이터가 입력됩니다.
+                5행부터 C열(이름)이 비어있는 첫 번째 행에 데이터가 입력됩니다.
               </div>
               <button
                 onClick={handleExport}
