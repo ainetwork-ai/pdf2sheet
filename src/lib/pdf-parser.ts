@@ -106,15 +106,19 @@ function extractOvertimeRows(
     entries.push({
       name,
       workPeriod: periodRaw.replace(/\s+/g, ""),
-      workHours,
-      recognizedHours: Math.round(recognizedHours * 10000) / 10000,
-      recognizedDays: Math.round(recognizedDays * 10000) / 10000,
+      workHours: round2(workHours),
+      recognizedHours: round2(recognizedHours),
+      recognizedDays: round2(recognizedDays),
       applicationDate,
       workContent: workContent.trim(),
     });
   }
 
   return entries;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /**
