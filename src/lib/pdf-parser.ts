@@ -85,9 +85,10 @@ function extractOvertimeRows(
   const entries: OvertimeEntry[] = [];
 
   // Find table data lines: starts with a number (1, 2, 3...) followed by date pattern
+  // Hours format: "5.5" (decimal), "1h" (with suffix), "4:10" (hours:minutes)
   for (const line of lines) {
     const match = line.match(
-      /^\s*(\d+)\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s+(.*?)\s+([\d.]+)\s*$/
+      /^\s*(\d+)\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s+(.*?)\s+([\d.:]+h?)\s*$/
     );
     if (!match) continue;
 
@@ -96,8 +97,8 @@ function extractOvertimeRows(
     // Skip template/empty rows (dates like "2026.00.00")
     if (periodRaw.includes(".00.00")) continue;
 
-    const workHours = parseFloat(hoursStr);
-    if (isNaN(workHours) || workHours <= 0) continue;
+    const workHours = parseWorkHours(hoursStr);
+    if (workHours <= 0) continue;
 
     const recognizedHours = workHours * 1.5;
     const recognizedDays = recognizedHours / 8;
@@ -114,6 +115,28 @@ function extractOvertimeRows(
   }
 
   return entries;
+}
+
+/**
+ * Parse work hours from various formats:
+ * "5.5" → 5.5, "1h" → 1, "4:10" → 4.1667
+ */
+function parseWorkHours(raw: string): number {
+  const s = raw.trim();
+
+  // "1h" or "2.5h"
+  if (s.endsWith("h")) {
+    return parseFloat(s.slice(0, -1)) || 0;
+  }
+
+  // "4:10" (hours:minutes)
+  if (s.includes(":")) {
+    const [h, m] = s.split(":");
+    return (parseInt(h, 10) || 0) + (parseInt(m, 10) || 0) / 60;
+  }
+
+  // "5.5" (decimal)
+  return parseFloat(s) || 0;
 }
 
 /**
