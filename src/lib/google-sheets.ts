@@ -86,30 +86,46 @@ export async function findFirstEmptyRow(
 }
 
 /**
- * Write data to specific rows starting from B column (skip 연번 A column).
+ * Write data to specific rows, skipping H(보상), I(지급여부), J(지급일), L(승인일).
+ * Writes: C~G (core data), K (신청일), M (근무내용)
  */
 export async function writeToSheet(
   spreadsheetId: string,
   sheetName: string,
   startRow: number,
-  values: string[][]
+  coreRows: string[][],
+  dateRows: string[][],
+  contentRows: string[][]
 ) {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
-  const endRow = startRow + values.length - 1;
-  const range = `${sheetName}!C${startRow}:M${endRow}`;
+  const endRow = startRow + coreRows.length - 1;
 
-  const response = await sheets.spreadsheets.values.update({
+  const response = await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
-    range,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values },
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data: [
+        {
+          range: `${sheetName}!C${startRow}:G${endRow}`,
+          values: coreRows,
+        },
+        {
+          range: `${sheetName}!K${startRow}:K${endRow}`,
+          values: dateRows,
+        },
+        {
+          range: `${sheetName}!M${startRow}:M${endRow}`,
+          values: contentRows,
+        },
+      ],
+    },
   });
 
   return {
-    updatedRows: response.data.updatedRows || 0,
-    updatedRange: response.data.updatedRange || "",
+    updatedRows: response.data.totalUpdatedRows || 0,
+    updatedRange: `${sheetName}!C${startRow}:M${endRow}`,
   };
 }
 

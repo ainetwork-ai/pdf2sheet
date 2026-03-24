@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFileById, updateFileStatus } from "@/lib/db";
 import { findFirstEmptyRow, writeToSheet, extractSpreadsheetId } from "@/lib/google-sheets";
-import { OvertimeEntry, toSheetRow } from "@/lib/pdf-parser";
+import { OvertimeEntry, toSheetData } from "@/lib/pdf-parser";
 import { unlink } from "fs/promises";
 
 export async function POST(request: NextRequest) {
@@ -46,14 +46,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find first empty row (min row 5, check B column)
+    // Find first empty row (min row 5, check C column)
     const startRow = await findFirstEmptyRow(sheetId, sheetName);
 
-    // Build sheet rows (B~L columns, no 연번)
-    const sheetRows = allEntries.map((entry) => toSheetRow(entry));
+    // Build split data (C~G, K, M — skip H,I,J,L)
+    const coreRows: string[][] = [];
+    const dateRows: string[][] = [];
+    const contentRows: string[][] = [];
+
+    for (const entry of allEntries) {
+      const data = toSheetData(entry);
+      coreRows.push(data.coreData);
+      dateRows.push(data.applicationDate);
+      contentRows.push(data.workContent);
+    }
 
     // Write to Google Sheet at the found row
-    const result = await writeToSheet(sheetId, sheetName, startRow, sheetRows);
+    const result = await writeToSheet(
+      sheetId, sheetName, startRow, coreRows, dateRows, contentRows
+    );
 
     // Clean up: delete PDF files and update status
     for (const id of fileIds) {
