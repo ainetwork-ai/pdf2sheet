@@ -47,7 +47,7 @@ export default function Home() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [parsedResults, setParsedResults] = useState<ParsedResult[]>([]);
   const [spreadsheetId, setSpreadsheetId] = useState("");
-  const [sheetName, setSheetName] = useState("Sheet1");
+  const [sheetName, setSheetName] = useState("26년");
 
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -160,7 +160,7 @@ export default function Home() {
         body: JSON.stringify({
           fileIds: parsedIds,
           spreadsheetId: spreadsheetId.trim(),
-          sheetName: sheetName.trim() || "Sheet1",
+          sheetName: sheetName.trim() || "26년",
         }),
       });
       const data = await res.json();
@@ -464,21 +464,17 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    스프레드시트 ID
+                    스프레드시트 ID 또는 링크
                   </label>
                   <input
                     type="text"
                     value={spreadsheetId}
                     onChange={(e) => setSpreadsheetId(e.target.value)}
-                    placeholder="URL에서 /d/ 뒤의 값"
+                    placeholder="스프레드시트 링크를 붙여넣으세요"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p className="text-xs text-slate-400 mt-1">
-                    docs.google.com/spreadsheets/d/
-                    <span className="text-blue-500 font-mono">
-                      이_부분이_ID
-                    </span>
-                    /edit
+                    전체 URL 또는 ID만 입력 가능
                   </p>
                 </div>
                 <div>
@@ -489,7 +485,7 @@ export default function Home() {
                     type="text"
                     value={sheetName}
                     onChange={(e) => setSheetName(e.target.value)}
-                    placeholder="Sheet1"
+                    placeholder="26년"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
