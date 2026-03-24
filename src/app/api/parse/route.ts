@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
 
     if (!fileIds || fileIds.length === 0) {
       return NextResponse.json(
-        { error: "No file IDs provided" },
+        { error: "파일 ID가 없습니다." },
         { status: 400 }
       );
     }
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     for (const id of fileIds) {
       const file = getFileById(id);
       if (!file) {
-        results.push({ id, error: "File not found" });
+        results.push({ id, error: "파일을 찾을 수 없습니다." });
         continue;
       }
 
@@ -29,10 +29,10 @@ export async function POST(request: NextRequest) {
         results.push({
           id,
           originalName: file.original_name,
-          headers: parsedData.headers,
-          rows: parsedData.rows,
-          pageCount: parsedData.pageCount,
-          rowCount: parsedData.rows.length,
+          applicantName: parsedData.applicantName,
+          applicationDate: parsedData.applicationDate,
+          entries: parsedData.entries,
+          entryCount: parsedData.entries.length,
         });
       } catch (parseError) {
         console.error(`Parse error for file ${id}:`, parseError);
@@ -40,7 +40,10 @@ export async function POST(request: NextRequest) {
         results.push({
           id,
           originalName: file.original_name,
-          error: "Failed to parse PDF",
+          error:
+            parseError instanceof Error
+              ? parseError.message
+              : "PDF 파싱에 실패했습니다.",
         });
       }
     }
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Parse error:", error);
     return NextResponse.json(
-      { error: "Failed to parse files" },
+      { error: "파싱에 실패했습니다." },
       { status: 500 }
     );
   }

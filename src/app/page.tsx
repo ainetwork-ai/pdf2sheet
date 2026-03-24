@@ -9,22 +9,46 @@ interface UploadedFile {
   status: string;
 }
 
+interface OvertimeEntry {
+  name: string;
+  workPeriod: string;
+  workHours: number;
+  recognizedHours: number;
+  recognizedDays: number;
+  applicationDate: string;
+  workContent: string;
+}
+
 interface ParsedResult {
   id: number;
   originalName: string;
-  headers: string[];
-  rows: string[][];
-  pageCount: number;
-  rowCount: number;
+  applicantName: string;
+  applicationDate: string;
+  entries: OvertimeEntry[];
+  entryCount: number;
   error?: string;
 }
+
+const SHEET_COLUMNS = [
+  "연번",
+  "이름",
+  "초과근무일시",
+  "초과시간",
+  "인정시간",
+  "인정일수",
+  "보상",
+  "지급여부",
+  "지급일",
+  "신청일",
+  "승인일",
+  "근무내용",
+];
 
 export default function Home() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [parsedResults, setParsedResults] = useState<ParsedResult[]>([]);
   const [spreadsheetId, setSpreadsheetId] = useState("");
   const [sheetName, setSheetName] = useState("Sheet1");
-  const [includeHeaders, setIncludeHeaders] = useState(false);
 
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -138,7 +162,6 @@ export default function Home() {
           fileIds: parsedIds,
           spreadsheetId: spreadsheetId.trim(),
           sheetName: sheetName.trim() || "Sheet1",
-          includeHeaders,
         }),
       });
       const data = await res.json();
@@ -146,7 +169,7 @@ export default function Home() {
 
       showMessage(
         "success",
-        `${data.rowCount}개 행이 Google Sheets에 추가되었습니다.`
+        `${data.rowCount}건이 연번 ${data.startNumber}부터 Google Sheets에 추가되었습니다.`
       );
       setFiles([]);
       setParsedResults([]);
@@ -180,12 +203,12 @@ export default function Home() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const totalRows = parsedResults.reduce(
-    (sum, r) => sum + (r.rows?.length || 0),
+  const totalEntries = parsedResults.reduce(
+    (sum, r) => sum + (r.entryCount || 0),
     0
   );
   const hasUploaded = files.some((f) => f.status === "uploaded");
-  const hasParsed = parsedResults.some((r) => r.rows && r.rows.length > 0);
+  const hasParsed = parsedResults.some((r) => r.entryCount > 0);
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -194,7 +217,7 @@ export default function Home() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900">PDF2Sheet</h1>
           <p className="text-slate-500 mt-1">
-            PDF 테이블 데이터를 Google Sheets로 내보내기
+            초과근무 신청서 PDF를 Google Sheets로 내보내기
           </p>
         </div>
 
@@ -258,7 +281,7 @@ export default function Home() {
             ) : (
               <>
                 <p className="text-slate-600 font-medium">
-                  클릭하거나 PDF 파일을 드래그하세요
+                  클릭하거나 초과근무 신청서 PDF를 드래그하세요
                 </p>
                 <p className="text-slate-400 text-sm mt-1">
                   여러 파일을 한번에 업로드할 수 있습니다
@@ -281,7 +304,7 @@ export default function Home() {
                   disabled={parsing}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {parsing ? "파싱 중..." : "2. 테이블 추출"}
+                  {parsing ? "파싱 중..." : "2. 데이터 추출"}
                 </button>
               )}
             </div>
@@ -321,7 +344,7 @@ export default function Home() {
                       {file.status === "uploaded"
                         ? "대기 중"
                         : file.status === "parsed"
-                          ? "파싱 완료"
+                          ? "추출 완료"
                           : file.status === "exported"
                             ? "내보내기 완료"
                             : "오류"}
@@ -355,7 +378,7 @@ export default function Home() {
         {parsedResults.length > 0 && (
           <section className="mb-8">
             <h2 className="text-lg font-semibold text-slate-800 mb-3">
-              추출된 데이터 미리보기 (총 {totalRows}행)
+              추출된 데이터 미리보기 (총 {totalEntries}건)
             </h2>
             {parsedResults.map((result) =>
               result.error ? (
@@ -370,49 +393,64 @@ export default function Home() {
                   key={result.id}
                   className="mb-4 bg-white rounded-xl border border-slate-200 overflow-hidden"
                 >
-                  <div className="px-4 py-2 bg-slate-50 border-b border-slate-200">
+                  <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
                     <span className="text-sm font-medium text-slate-700">
                       {result.originalName}
                     </span>
-                    <span className="text-xs text-slate-400 ml-2">
-                      {result.rowCount}행 / {result.headers?.length || 0}열 /{" "}
-                      {result.pageCount}페이지
+                    <span className="text-xs text-slate-400">
+                      신청자: {result.applicantName} / 신청일:{" "}
+                      {result.applicationDate} / {result.entryCount}건
                     </span>
                   </div>
-                  <div className="overflow-x-auto max-h-80">
+                  <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="bg-slate-50 sticky top-0">
+                      <thead className="bg-slate-50">
                         <tr>
-                          {result.headers?.map((h, i) => (
+                          {SHEET_COLUMNS.map((col) => (
                             <th
-                              key={i}
+                              key={col}
                               className="px-3 py-2 text-left text-xs font-semibold text-slate-600 whitespace-nowrap border-b border-slate-200"
                             >
-                              {h}
+                              {col}
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {result.rows?.slice(0, 50).map((row, i) => (
+                        {result.entries?.map((entry, i) => (
                           <tr key={i} className="hover:bg-slate-50">
-                            {row.map((cell, j) => (
-                              <td
-                                key={j}
-                                className="px-3 py-2 text-slate-600 whitespace-nowrap"
-                              >
-                                {cell}
-                              </td>
-                            ))}
+                            <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
+                              auto
+                            </td>
+                            <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
+                              {entry.name}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                              {entry.workPeriod}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                              {entry.workHours}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                              {entry.recognizedHours}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                              {entry.recognizedDays}
+                            </td>
+                            <td className="px-3 py-2 text-slate-300">-</td>
+                            <td className="px-3 py-2 text-slate-300">-</td>
+                            <td className="px-3 py-2 text-slate-300">-</td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                              {entry.applicationDate}
+                            </td>
+                            <td className="px-3 py-2 text-slate-300">-</td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {entry.workContent}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                    {(result.rowCount || 0) > 50 && (
-                      <div className="px-4 py-2 text-xs text-slate-400 bg-slate-50 border-t border-slate-200">
-                        ... 외 {(result.rowCount || 0) - 50}행 더 있음
-                      </div>
-                    )}
                   </div>
                 </div>
               )
@@ -427,7 +465,7 @@ export default function Home() {
               3. Google Sheets로 내보내기
             </h2>
             <div className="bg-white rounded-xl border border-slate-200 p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     스프레드시트 ID
@@ -460,20 +498,8 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-2 mb-4">
-                <input
-                  type="checkbox"
-                  id="includeHeaders"
-                  checked={includeHeaders}
-                  onChange={(e) => setIncludeHeaders(e.target.checked)}
-                  className="rounded border-slate-300"
-                />
-                <label
-                  htmlFor="includeHeaders"
-                  className="text-sm text-slate-600"
-                >
-                  헤더(컬럼명) 포함
-                </label>
+              <div className="mb-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
+                연번은 시트의 마지막 번호 다음부터 자동 부여됩니다.
               </div>
               <button
                 onClick={handleExport}
@@ -482,7 +508,7 @@ export default function Home() {
               >
                 {exporting
                   ? "내보내는 중..."
-                  : `Google Sheets로 ${totalRows}행 내보내기`}
+                  : `Google Sheets로 ${totalEntries}건 내보내기`}
               </button>
             </div>
           </section>

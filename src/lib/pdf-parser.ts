@@ -1,134 +1,141 @@
-import PDFParser from "pdf2json";
+import { execFile } from "child_process";
+import { promisify } from "util";
 
-interface TextItem {
-  x: number;
-  y: number;
-  text: string;
+const execFileAsync = promisify(execFile);
+
+export interface OvertimeEntry {
+  name: string;
+  workPeriod: string;
+  workHours: number;
+  recognizedHours: number;
+  recognizedDays: number;
+  applicationDate: string;
+  workContent: string;
 }
 
-export interface ParsedTable {
-  headers: string[];
-  rows: string[][];
-  pageCount: number;
+export interface ParsedResult {
+  entries: OvertimeEntry[];
+  applicantName: string;
+  applicationDate: string;
 }
 
-interface PdfText {
-  x: number;
-  y: number;
-  R: Array<{ T: string }>;
+export async function parsePdfTable(filePath: string): Promise<ParsedResult> {
+  const text = await extractText(filePath);
+  return parseOvertimeDocument(text);
 }
 
-interface PdfPage {
-  Texts: PdfText[];
+async function extractText(filePath: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("pdftotext", [
+      "-layout",
+      filePath,
+      "-",
+    ]);
+    return stdout;
+  } catch {
+    throw new Error("pdftotext 실행 실패. poppler가 설치되어 있는지 확인하세요.");
+  }
 }
 
-interface PdfData {
-  Pages: PdfPage[];
+function parseOvertimeDocument(text: string): ParsedResult {
+  const lines = text.split("\n").map((l) => l.trim());
+
+  // 1. Extract applicant name
+  const applicantName = extractField(lines, /성명\s+(\S+)/);
+  if (!applicantName) {
+    throw new Error("신청자 성명을 찾을 수 없습니다.");
+  }
+
+  // 2. Extract application date from header line "2026-206 2026. 3. 23 (월) 오후 10:57 작성"
+  const applicationDate = extractApplicationDate(lines);
+
+  // 3. Extract overtime table rows
+  const entries = extractOvertimeRows(lines, applicantName, applicationDate);
+
+  return { entries, applicantName, applicationDate };
 }
 
-export async function parsePdfTable(filePath: string): Promise<ParsedTable> {
-  const pdfData = await loadPdf(filePath);
-  return extractTables(pdfData);
+function extractField(lines: string[], pattern: RegExp): string | null {
+  for (const line of lines) {
+    const match = line.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
 }
 
-function loadPdf(filePath: string): Promise<PdfData> {
-  return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser();
+function extractApplicationDate(lines: string[]): string {
+  for (const line of lines) {
+    // Match pattern like "2026. 3. 23 (월)" or "2026. 3. 23(월)"
+    const match = line.match(
+      /(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*\([월화수목금토일]\)/
+    );
+    if (match) {
+      const [, year, month, day] = match;
+      return `${year}.${month.padStart(2, "0")}.${day.padStart(2, "0")}`;
+    }
+  }
+  return "";
+}
 
-    pdfParser.on("pdfParser_dataReady", (data: PdfData) => {
-      resolve(data);
+function extractOvertimeRows(
+  lines: string[],
+  name: string,
+  applicationDate: string
+): OvertimeEntry[] {
+  const entries: OvertimeEntry[] = [];
+
+  // Find table data lines: starts with a number (1, 2, 3...) followed by date pattern
+  for (const line of lines) {
+    const match = line.match(
+      /^\s*(\d+)\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s+(.*?)\s+([\d.]+)\s*$/
+    );
+    if (!match) continue;
+
+    const [, , periodRaw, workContent, hoursStr] = match;
+
+    // Skip template/empty rows (dates like "2026.00.00")
+    if (periodRaw.includes(".00.00")) continue;
+
+    const workHours = parseFloat(hoursStr);
+    if (isNaN(workHours) || workHours <= 0) continue;
+
+    const recognizedHours = workHours * 1.5;
+    const recognizedDays = recognizedHours / 8;
+
+    entries.push({
+      name,
+      workPeriod: periodRaw.replace(/\s+/g, ""),
+      workHours,
+      recognizedHours: Math.round(recognizedHours * 10000) / 10000,
+      recognizedDays: Math.round(recognizedDays * 10000) / 10000,
+      applicationDate,
+      workContent: workContent.trim(),
     });
+  }
 
-    pdfParser.on("pdfParser_dataError", (err: Error | { parserError: Error }) => {
-      const message = err instanceof Error ? err.message : String(err.parserError);
-      reject(new Error(message));
-    });
-
-    pdfParser.loadPDF(filePath);
-  });
+  return entries;
 }
 
-function extractTables(pdfData: PdfData): ParsedTable {
-  const allItems: TextItem[] = [];
-
-  for (const page of pdfData.Pages) {
-    if (!page.Texts) continue;
-
-    for (const text of page.Texts) {
-      const content = text.R?.map((r) => decodeURIComponent(r.T)).join("") || "";
-      if (content.trim()) {
-        allItems.push({
-          x: text.x,
-          y: text.y,
-          text: content.trim(),
-        });
-      }
-    }
-  }
-
-  if (allItems.length === 0) {
-    return { headers: [], rows: [], pageCount: pdfData.Pages.length };
-  }
-
-  // Sort by y (top to bottom), then x (left to right)
-  allItems.sort((a, b) => a.y - b.y || a.x - b.x);
-
-  // Group by approximate y position to form rows
-  const ROW_TOLERANCE = 0.5;
-  const rowGroups: TextItem[][] = [];
-  let currentRow: TextItem[] = [allItems[0]];
-
-  for (let i = 1; i < allItems.length; i++) {
-    if (Math.abs(allItems[i].y - currentRow[0].y) <= ROW_TOLERANCE) {
-      currentRow.push(allItems[i]);
-    } else {
-      rowGroups.push([...currentRow]);
-      currentRow = [allItems[i]];
-    }
-  }
-  rowGroups.push(currentRow);
-
-  // Sort each row by x position
-  for (const row of rowGroups) {
-    row.sort((a, b) => a.x - b.x);
-  }
-
-  // First row = headers
-  const headerRow = rowGroups[0];
-  const headers = headerRow.map((item) => item.text);
-  const headerXPositions = headerRow.map((item) => item.x);
-
-  // Map data rows to columns using nearest header x-position
-  const rows = rowGroups.slice(1).map((row) => {
-    const rowData: string[] = new Array(headers.length).fill("");
-    for (const item of row) {
-      const colIdx = findNearestColumn(item.x, headerXPositions);
-      rowData[colIdx] = rowData[colIdx]
-        ? rowData[colIdx] + " " + item.text
-        : item.text;
-    }
-    return rowData;
-  });
-
-  // Filter out empty rows
-  const filteredRows = rows.filter((row) => row.some((cell) => cell !== ""));
-
-  return {
-    headers,
-    rows: filteredRows,
-    pageCount: pdfData.Pages.length,
-  };
-}
-
-function findNearestColumn(x: number, headerXPositions: number[]): number {
-  let minDist = Infinity;
-  let colIdx = 0;
-  for (let j = 0; j < headerXPositions.length; j++) {
-    const dist = Math.abs(x - headerXPositions[j]);
-    if (dist < minDist) {
-      minDist = dist;
-      colIdx = j;
-    }
-  }
-  return colIdx;
+/**
+ * Convert OvertimeEntry to a Google Sheets row.
+ * Columns: 연번, 이름, 초과근무일시, 초과시간, 인정시간, 인정일수, 보상, 지급여부, 지급일, 신청일, 승인일, 근무내용
+ */
+export function toSheetRow(
+  entry: OvertimeEntry,
+  rowNumber: number
+): string[] {
+  return [
+    String(rowNumber),                          // 연번
+    entry.name,                                 // 이름
+    entry.workPeriod,                           // 초과근무일시
+    String(entry.workHours),                    // 초과시간
+    String(entry.recognizedHours),              // 인정시간
+    String(entry.recognizedDays),               // 인정일수
+    "",                                         // 보상
+    "",                                         // 지급여부
+    "",                                         // 지급일
+    entry.applicationDate,                      // 신청일
+    "",                                         // 승인일
+    entry.workContent,                          // 근무내용
+  ];
 }

@@ -1,62 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFileById, updateFileStatus } from "@/lib/db";
-import { appendToSheet } from "@/lib/google-sheets";
+import { appendToSheet, getLastRowNumber } from "@/lib/google-sheets";
+import { OvertimeEntry, toSheetRow } from "@/lib/pdf-parser";
 import { unlink } from "fs/promises";
 
 export async function POST(request: NextRequest) {
   try {
-    const { fileIds, spreadsheetId, sheetName, includeHeaders } =
-      (await request.json()) as {
-        fileIds: number[];
-        spreadsheetId: string;
-        sheetName: string;
-        includeHeaders: boolean;
-      };
+    const { fileIds, spreadsheetId, sheetName } = (await request.json()) as {
+      fileIds: number[];
+      spreadsheetId: string;
+      sheetName: string;
+    };
 
     if (!spreadsheetId || !sheetName) {
       return NextResponse.json(
-        { error: "Spreadsheet ID and sheet name are required" },
+        { error: "스프레드시트 ID와 시트 이름을 입력하세요." },
         { status: 400 }
       );
     }
 
     if (!fileIds || fileIds.length === 0) {
       return NextResponse.json(
-        { error: "No file IDs provided" },
+        { error: "파일이 선택되지 않았습니다." },
         { status: 400 }
       );
     }
 
-    // Collect all parsed data
-    let allHeaders: string[] = [];
-    const allRows: string[][] = [];
+    // Collect all entries from parsed files
+    const allEntries: OvertimeEntry[] = [];
 
     for (const id of fileIds) {
       const file = getFileById(id);
       if (!file?.parsed_data) continue;
 
       const parsedData = JSON.parse(file.parsed_data);
-      if (allHeaders.length === 0 && parsedData.headers) {
-        allHeaders = parsedData.headers;
-      }
-      allRows.push(...parsedData.rows);
+      allEntries.push(...parsedData.entries);
     }
 
-    if (allRows.length === 0) {
+    if (allEntries.length === 0) {
       return NextResponse.json(
-        { error: "No parsed data to export" },
+        { error: "내보낼 데이터가 없습니다." },
         { status: 400 }
       );
     }
 
-    // Append to Google Sheet
-    const result = await appendToSheet(
-      spreadsheetId,
-      sheetName,
-      allRows,
-      includeHeaders,
-      allHeaders
+    // Get last row number for auto-increment
+    const lastRowNumber = await getLastRowNumber(spreadsheetId, sheetName);
+
+    // Build sheet rows with auto-incremented 연번
+    const sheetRows = allEntries.map((entry, idx) =>
+      toSheetRow(entry, lastRowNumber + idx + 1)
     );
+
+    // Append to Google Sheet
+    const result = await appendToSheet(spreadsheetId, sheetName, sheetRows);
 
     // Clean up: delete PDF files and update status
     for (const id of fileIds) {
@@ -73,13 +70,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      rowCount: allRows.length,
+      rowCount: allEntries.length,
+      startNumber: lastRowNumber + 1,
       updatedRange: result.updatedRange,
     });
   } catch (error) {
     console.error("Export error:", error);
     const message =
-      error instanceof Error ? error.message : "Failed to export to Google Sheets";
+      error instanceof Error
+        ? error.message
+        : "Google Sheets 내보내기에 실패했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

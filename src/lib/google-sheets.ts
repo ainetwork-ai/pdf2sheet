@@ -48,6 +48,29 @@ export async function appendToSheet(
   };
 }
 
+export async function getLastRowNumber(
+  spreadsheetId: string,
+  sheetName: string
+): Promise<number> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A:A`,
+  });
+
+  const values = response.data.values;
+  if (!values || values.length <= 1) return 0;
+
+  // Find last numeric value in column A (skip header row)
+  for (let i = values.length - 1; i >= 1; i--) {
+    const val = parseInt(values[i][0], 10);
+    if (!isNaN(val)) return val;
+  }
+  return 0;
+}
+
 export async function getSheetInfo(spreadsheetId: string) {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
