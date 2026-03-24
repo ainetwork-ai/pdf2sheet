@@ -118,24 +118,21 @@ function extractOvertimeRows(
 
 /**
  * Convert OvertimeEntry to a Google Sheets row.
- * Columns: 연번, 이름, 초과근무일시, 초과시간, 인정시간, 인정일수, 보상, 지급여부, 지급일, 신청일, 승인일, 근무내용
+ * Columns B~L: 이름, 초과근무일시, 초과시간, 인정시간, 인정일수, 보상, 지급여부, 지급일, 신청일, 승인일, 근무내용
+ * (연번 A열은 건드리지 않음)
  */
-export function toSheetRow(
-  entry: OvertimeEntry,
-  rowNumber: number
-): string[] {
+export function toSheetRow(entry: OvertimeEntry): string[] {
   return [
-    String(rowNumber),                          // 연번
-    entry.name,                                 // 이름
-    entry.workPeriod,                           // 초과근무일시
-    String(entry.workHours),                    // 초과시간
-    String(entry.recognizedHours),              // 인정시간
-    String(entry.recognizedDays),               // 인정일수
-    "",                                         // 보상
-    "",                                         // 지급여부
-    "",                                         // 지급일
-    entry.applicationDate,                      // 신청일
-    "",                                         // 승인일
-    entry.workContent,                          // 근무내용
+    entry.name,                                 // B: 이름
+    entry.workPeriod,                           // C: 초과근무일시
+    String(entry.workHours),                    // D: 초과시간
+    String(entry.recognizedHours),              // E: 인정시간
+    String(entry.recognizedDays),               // F: 인정일수
+    "",                                         // G: 보상
+    "",                                         // H: 지급여부
+    "",                                         // I: 지급일
+    entry.applicationDate,                      // J: 신청일
+    "",                                         // K: 승인일
+    entry.workContent,                          // L: 근무내용
   ];
 }

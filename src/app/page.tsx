@@ -30,7 +30,6 @@ interface ParsedResult {
 }
 
 const SHEET_COLUMNS = [
-  "연번",
   "이름",
   "초과근무일시",
   "초과시간",
@@ -169,7 +168,7 @@ export default function Home() {
 
       showMessage(
         "success",
-        `${data.rowCount}건이 연번 ${data.startNumber}부터 Google Sheets에 추가되었습니다.`
+        `${data.rowCount}건이 ${data.startRow}행부터 Google Sheets에 추가되었습니다.`
       );
       setFiles([]);
       setParsedResults([]);
@@ -419,9 +418,6 @@ export default function Home() {
                       <tbody className="divide-y divide-slate-100">
                         {result.entries?.map((entry, i) => (
                           <tr key={i} className="hover:bg-slate-50">
-                            <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
-                              auto
-                            </td>
                             <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
                               {entry.name}
                             </td>
@@ -499,7 +495,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="mb-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
-                연번은 시트의 마지막 번호 다음부터 자동 부여됩니다.
+                5행부터 B열(이름)이 비어있는 첫 번째 행에 데이터가 입력됩니다.
               </div>
               <button
                 onClick={handleExport}

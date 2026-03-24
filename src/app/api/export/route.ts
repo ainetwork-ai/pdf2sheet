@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFileById, updateFileStatus } from "@/lib/db";
-import { appendToSheet, getLastRowNumber, extractSpreadsheetId } from "@/lib/google-sheets";
+import { findFirstEmptyRow, writeToSheet, extractSpreadsheetId } from "@/lib/google-sheets";
 import { OvertimeEntry, toSheetRow } from "@/lib/pdf-parser";
 import { unlink } from "fs/promises";
 
@@ -46,16 +46,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get last row number for auto-increment
-    const lastRowNumber = await getLastRowNumber(sheetId, sheetName);
+    // Find first empty row (min row 5, check B column)
+    const startRow = await findFirstEmptyRow(sheetId, sheetName);
 
-    // Build sheet rows with auto-incremented 연번
-    const sheetRows = allEntries.map((entry, idx) =>
-      toSheetRow(entry, lastRowNumber + idx + 1)
-    );
+    // Build sheet rows (B~L columns, no 연번)
+    const sheetRows = allEntries.map((entry) => toSheetRow(entry));
 
-    // Append to Google Sheet
-    const result = await appendToSheet(sheetId, sheetName, sheetRows);
+    // Write to Google Sheet at the found row
+    const result = await writeToSheet(sheetId, sheetName, startRow, sheetRows);
 
     // Clean up: delete PDF files and update status
     for (const id of fileIds) {
@@ -73,7 +71,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       rowCount: allEntries.length,
-      startNumber: lastRowNumber + 1,
+      startRow,
       updatedRange: result.updatedRange,
     });
   } catch (error) {

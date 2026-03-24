@@ -53,34 +53,13 @@ function getAuth() {
   });
 }
 
-export async function appendToSheet(
-  spreadsheetId: string,
-  sheetName: string,
-  values: string[][],
-  includeHeaders: boolean = false,
-  headers?: string[]
-) {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: "v4", auth });
+const MIN_DATA_ROW = 5;
 
-  const data = includeHeaders && headers ? [headers, ...values] : values;
-  const range = `${sheetName}!A1`;
-
-  const response = await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range,
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: { values: data },
-  });
-
-  return {
-    updatedRows: response.data.updates?.updatedRows || 0,
-    updatedRange: response.data.updates?.updatedRange || "",
-  };
-}
-
-export async function getLastRowNumber(
+/**
+ * Find the first empty row by checking column B (이름) from row 5 onwards.
+ * Rows where only 인정시간/인정일수 have "0" are treated as empty.
+ */
+export async function findFirstEmptyRow(
   spreadsheetId: string,
   sheetName: string
 ): Promise<number> {
@@ -89,18 +68,49 @@ export async function getLastRowNumber(
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${sheetName}!A:A`,
+    range: `${sheetName}!B${MIN_DATA_ROW}:B`,
   });
 
   const values = response.data.values;
-  if (!values || values.length <= 1) return 0;
+  if (!values || values.length === 0) return MIN_DATA_ROW;
 
-  // Find last numeric value in column A (skip header row)
-  for (let i = values.length - 1; i >= 1; i--) {
-    const val = parseInt(values[i][0], 10);
-    if (!isNaN(val)) return val;
+  for (let i = 0; i < values.length; i++) {
+    const cell = values[i][0];
+    if (!cell || cell.toString().trim() === "") {
+      return MIN_DATA_ROW + i;
+    }
   }
-  return 0;
+
+  // All rows have data, append after last
+  return MIN_DATA_ROW + values.length;
+}
+
+/**
+ * Write data to specific rows starting from B column (skip 연번 A column).
+ */
+export async function writeToSheet(
+  spreadsheetId: string,
+  sheetName: string,
+  startRow: number,
+  values: string[][]
+) {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const endRow = startRow + values.length - 1;
+  const range = `${sheetName}!B${startRow}:L${endRow}`;
+
+  const response = await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values },
+  });
+
+  return {
+    updatedRows: response.data.updatedRows || 0,
+    updatedRange: response.data.updatedRange || "",
+  };
 }
 
 export async function getSheetInfo(spreadsheetId: string) {
