@@ -40,6 +40,10 @@ yarn-error.log*
 /uploads/
 /data/
 
+# google credentials
+service-account-key.json
+*.json.bak
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

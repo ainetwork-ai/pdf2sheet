@@ -1,14 +1,34 @@
 import { google } from "googleapis";
+import fs from "fs";
+import path from "path";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
 function getAuth() {
+  const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE;
+
+  if (keyFilePath) {
+    const resolved = path.isAbsolute(keyFilePath)
+      ? keyFilePath
+      : path.join(process.cwd(), keyFilePath);
+
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`Service Account 키 파일을 찾을 수 없습니다: ${resolved}`);
+    }
+
+    return new google.auth.GoogleAuth({
+      keyFile: resolved,
+      scopes: SCOPES,
+    });
+  }
+
+  // Fallback: env variables
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
   if (!clientEmail || !privateKey) {
     throw new Error(
-      "Google credentials not configured. Set GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY in .env.local"
+      "Google 인증 미설정. GOOGLE_SERVICE_ACCOUNT_KEY_FILE 또는 GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY를 .env.local에 설정하세요."
     );
   }
 
