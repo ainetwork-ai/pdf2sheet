@@ -16,6 +16,7 @@ interface OvertimeEntry {
   recognizedHours: number;
   recognizedDays: number;
   applicationDate: string;
+  approvalDate: string;
   workContent: string;
 }
 
@@ -439,7 +440,9 @@ export default function Home() {
                             <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
                               {entry.applicationDate}
                             </td>
-                            <td className="px-3 py-2 text-slate-300">-</td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                              {entry.approvalDate || "-"}
+                            </td>
                             <td className="px-3 py-2 text-slate-600">
                               {entry.workContent}
                             </td>

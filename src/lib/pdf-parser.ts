@@ -10,6 +10,7 @@ export interface OvertimeEntry {
   recognizedHours: number;
   recognizedDays: number;
   applicationDate: string;
+  approvalDate: string;
   workContent: string;
 }
 
@@ -17,6 +18,7 @@ export interface ParsedResult {
   entries: OvertimeEntry[];
   applicantName: string;
   applicationDate: string;
+  approvalDate: string;
 }
 
 export async function parsePdfTable(filePath: string): Promise<ParsedResult> {
@@ -49,10 +51,13 @@ function parseOvertimeDocument(text: string): ParsedResult {
   // 2. Extract application date from header line "2026-206 2026. 3. 23 (월) 오후 10:57 작성"
   const applicationDate = extractApplicationDate(lines);
 
-  // 3. Extract overtime table rows
-  const entries = extractOvertimeRows(lines, applicantName, applicationDate);
+  // 3. Extract approval date from "Common Computer님이 승인했어요. 2026. 3. 20 (금) 오후 12:32"
+  const approvalDate = extractApprovalDate(lines);
 
-  return { entries, applicantName, applicationDate };
+  // 4. Extract overtime table rows
+  const entries = extractOvertimeRows(lines, applicantName, applicationDate, approvalDate);
+
+  return { entries, applicantName, applicationDate, approvalDate };
 }
 
 function extractField(lines: string[], pattern: RegExp): string | null {
@@ -77,10 +82,24 @@ function extractApplicationDate(lines: string[]): string {
   return "";
 }
 
+function extractApprovalDate(lines: string[]): string {
+  for (const line of lines) {
+    const match = line.match(
+      /승인했어요\.\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*\([월화수목금토일]\)/
+    );
+    if (match) {
+      const [, year, month, day] = match;
+      return `${year}.${month.padStart(2, "0")}.${day.padStart(2, "0")}`;
+    }
+  }
+  return "";
+}
+
 function extractOvertimeRows(
   lines: string[],
   name: string,
-  applicationDate: string
+  applicationDate: string,
+  approvalDate: string
 ): OvertimeEntry[] {
   const entries: OvertimeEntry[] = [];
 
@@ -110,6 +129,7 @@ function extractOvertimeRows(
       recognizedHours: round2(recognizedHours),
       recognizedDays: round2(recognizedDays),
       applicationDate,
+      approvalDate,
       workContent: workContent.trim(),
     });
   }
@@ -158,7 +178,10 @@ export function toSheetData(entry: OvertimeEntry) {
       String(entry.recognizedHours),              // F: 인정시간
       String(entry.recognizedDays),               // G: 인정일수
     ],
-    applicationDate: [entry.applicationDate],     // K: 신청일
+    dateData: [                                   // K:L
+      entry.applicationDate,                      // K: 신청일
+      entry.approvalDate,                         // L: 승인일
+    ],
     workContent: [entry.workContent],             // M: 근무내용
   };
 }

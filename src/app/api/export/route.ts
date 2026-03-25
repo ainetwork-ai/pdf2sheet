@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Find first empty row (min row 5, check C column)
     const startRow = await findFirstEmptyRow(sheetId, sheetName);
 
-    // Build split data (C~G, K, M — skip H,I,J,L)
+    // Build split data (C~G, K~L, M — skip H,I,J)
     const coreRows: string[][] = [];
     const dateRows: string[][] = [];
     const contentRows: string[][] = [];
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     for (const entry of allEntries) {
       const data = toSheetData(entry);
       coreRows.push(data.coreData);
-      dateRows.push(data.applicationDate);
+      dateRows.push(data.dateData);
       contentRows.push(data.workContent);
     }
 

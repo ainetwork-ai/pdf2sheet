@@ -112,7 +112,7 @@ export async function writeToSheet(
           values: coreRows,
         },
         {
-          range: `${sheetName}!K${startRow}:K${endRow}`,
+          range: `${sheetName}!K${startRow}:L${endRow}`,
           values: dateRows,
         },
         {
