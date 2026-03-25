@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFileById, updateFileStatus } from "@/lib/db";
+import { getFileById, updateFileStatus, getAllFiles } from "@/lib/db";
 import { findFirstEmptyRow, writeToSheet, extractSpreadsheetId } from "@/lib/google-sheets";
 import { OvertimeEntry, toSheetData } from "@/lib/pdf-parser";
 import { unlink } from "fs/promises";
+
+async function cleanupAllFiles() {
+  const files = getAllFiles();
+  for (const file of files) {
+    try {
+      await unlink(file.file_path);
+    } catch {
+      // File might already be deleted
+    }
+    updateFileStatus(file.id, "exported");
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,19 +78,6 @@ export async function POST(request: NextRequest) {
       sheetId, sheetName, startRow, coreRows, dateRows, contentRows
     );
 
-    // Clean up: delete PDF files and update status
-    for (const id of fileIds) {
-      const file = getFileById(id);
-      if (file) {
-        try {
-          await unlink(file.file_path);
-        } catch {
-          // File might already be deleted
-        }
-        updateFileStatus(id, "exported");
-      }
-    }
-
     return NextResponse.json({
       success: true,
       rowCount: allEntries.length,
@@ -92,5 +91,8 @@ export async function POST(request: NextRequest) {
         ? error.message
         : "Google Sheets 내보내기에 실패했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });
+  } finally {
+    // Always clean up: delete all uploaded PDF files regardless of success/failure
+    await cleanupAllFiles();
   }
 }
