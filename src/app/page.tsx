@@ -30,6 +30,7 @@ interface ParsedResult {
   entries: OvertimeEntry[];
   entryCount: number;
   error?: string;
+  warnings?: string[];
 }
 
 interface PresetConfig {
@@ -437,6 +438,13 @@ export default function Home() {
                       {result.applicationDate} / {result.entryCount}건
                     </span>
                   </div>
+                  {result.warnings && result.warnings.length > 0 && (
+                    <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-xs text-red-600 font-medium">
+                      {result.warnings.map((w, wi) => (
+                        <div key={wi}>{w}</div>
+                      ))}
+                    </div>
+                  )}
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50">

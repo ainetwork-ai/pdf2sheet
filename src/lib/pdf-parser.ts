@@ -20,6 +20,7 @@ export interface ParsedResult {
   applicantName: string;
   applicationDate: string;
   approvalDate: string;
+  warnings: string[];
 }
 
 export async function parsePdfTable(filePath: string): Promise<ParsedResult> {
@@ -50,9 +51,18 @@ function parseOvertimeDocument(text: string): ParsedResult {
 
   const applicationDate = extractApplicationDate(lines);
   const approvalDate = extractApprovalDate(lines);
-  const entries = extractOvertimeRows(lines, applicantName, applicationDate, approvalDate);
+  const { entries, skippedLines } = extractOvertimeRows(lines, applicantName, applicationDate, approvalDate);
 
-  return { entries, applicantName, applicationDate, approvalDate };
+  const warnings: string[] = [];
+  if (!applicationDate) warnings.push("신청일을 찾을 수 없습니다.");
+  if (!approvalDate) warnings.push("승인일을 찾을 수 없습니다.");
+  if (skippedLines.length > 0) {
+    warnings.push(
+      `파싱 실패 ${skippedLines.length}건: ${skippedLines.map((l) => `"${l.trim().substring(0, 50)}..."`).join(", ")}`
+    );
+  }
+
+  return { entries, applicantName, applicationDate, approvalDate, warnings };
 }
 
 function extractField(lines: string[], pattern: RegExp): string | null {
@@ -88,15 +98,24 @@ function extractOvertimeRows(
   name: string,
   applicationDate: string,
   approvalDate: string
-): OvertimeEntry[] {
+): { entries: OvertimeEntry[]; skippedLines: string[] } {
   const entries: OvertimeEntry[] = [];
+  const skippedLines: string[] = [];
+
+  // Regex to detect potential table rows (starts with a number)
+  const rowCandidate = /^\s*(\d+)\s+\d{4}\./;
+  const fullMatch =
+    /^\s*(\d+)\s+([\d.]+\.?\s*\([^)]*\)~[\d.]+\.?\s*\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/;
 
   for (let i = 0; i < lines.length; i++) {
-    // Match: number, date-range (with or without dots/spaces before parens), content, hours
-    const match = lines[i].match(
-      /^\s*(\d+)\s+([\d.]+\.?\s*\([^)]*\)~[\d.]+\.?\s*\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/
-    );
-    if (!match) continue;
+    const match = lines[i].match(fullMatch);
+    if (!match) {
+      // Detect rows that look like table data but failed to parse
+      if (rowCandidate.test(lines[i]) && !lines[i].includes(".00.00")) {
+        skippedLines.push(lines[i]);
+      }
+      continue;
+    }
 
     const [, , periodRaw, workContent, hoursStr] = match;
 
@@ -145,7 +164,7 @@ function extractOvertimeRows(
     });
   }
 
-  return entries;
+  return { entries, skippedLines };
 }
 
 function round2(n: number): number {

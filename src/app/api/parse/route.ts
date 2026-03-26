@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
           applicationDate: parsedData.applicationDate,
           entries: parsedData.entries,
           entryCount: parsedData.entries.length,
+          warnings: parsedData.warnings,
         });
       } catch (parseError) {
         console.error(`Parse error for file ${id}:`, parseError);
