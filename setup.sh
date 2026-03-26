@@ -75,10 +75,23 @@ if [[ ! -f "$INSTALL_DIR/.env.local" ]]; then
   echo "GOOGLE_SERVICE_ACCOUNT_KEY_FILE=service-account-key.json" > "$INSTALL_DIR/.env.local"
 fi
 
-# 바탕화면에 바로가기 생성
-if [[ ! -f "$HOME/Desktop/PDF2Sheet.command" ]]; then
-  ln -s "$INSTALL_DIR/PDF2Sheet.command" "$HOME/Desktop/PDF2Sheet.command"
-  echo "[5/5] 바탕화면에 PDF2Sheet 바로가기 생성됨"
+# 바탕화면에 앱 생성 (아이콘 포함)
+APP_PATH="$HOME/Desktop/PDF2Sheet.app"
+if [[ ! -d "$APP_PATH" ]]; then
+  echo "[5/5] 바탕화면에 PDF2Sheet 앱 생성 중..."
+  osacompile -o "$APP_PATH" -e "
+tell application \"Terminal\"
+    activate
+    do script \"cd $INSTALL_DIR && npm run dev\"
+end tell
+delay 2
+open location \"http://localhost:3000\"
+"
+  # 커스텀 아이콘 적용
+  if [[ -f "$INSTALL_DIR/icon.icns" ]]; then
+    cp "$INSTALL_DIR/icon.icns" "$APP_PATH/Contents/Resources/applet.icns"
+    touch "$APP_PATH"
+  fi
 fi
 
 echo ""
@@ -86,6 +99,6 @@ echo "========================================="
 echo "  설치 완료!"
 echo "========================================="
 echo ""
-echo "  바탕화면의 PDF2Sheet 아이콘을 더블클릭하세요."
+echo "  바탕화면의 PDF2Sheet 앱을 더블클릭하세요."
 echo "  브라우저가 자동으로 열립니다."
 echo ""
