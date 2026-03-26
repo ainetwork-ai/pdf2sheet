@@ -16,17 +16,6 @@ interface Preset {
   is_default: number;
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  이름: "이름",
-  초과근무일시: "초과근무일시",
-  초과시간: "초과시간",
-  인정시간: "인정시간",
-  인정일수: "인정일수",
-  신청일: "신청일",
-  승인일: "승인일",
-  근무내용: "근무내용",
-};
-
 const DEFAULT_CONFIG: PresetConfig = {
   columns: {
     이름: "C",
@@ -140,11 +129,36 @@ export default function SettingsPage() {
     }
   };
 
-  const updateColumn = (field: string, col: string) => {
+  const updateColumnKey = (oldField: string, newField: string) => {
+    setEditConfig((prev) => {
+      const entries = Object.entries(prev.columns);
+      const newColumns: Record<string, string> = {};
+      for (const [k, v] of entries) {
+        newColumns[k === oldField ? newField : k] = v;
+      }
+      return { ...prev, columns: newColumns };
+    });
+  };
+
+  const updateColumnValue = (field: string, col: string) => {
     setEditConfig((prev) => ({
       ...prev,
       columns: { ...prev.columns, [field]: col.toUpperCase() },
     }));
+  };
+
+  const addColumn = () => {
+    setEditConfig((prev) => ({
+      ...prev,
+      columns: { ...prev.columns, ["새 필드"]: "A" },
+    }));
+  };
+
+  const removeColumn = (field: string) => {
+    setEditConfig((prev) => {
+      const { [field]: _, ...rest } = prev.columns;
+      return { ...prev, columns: rest };
+    });
   };
 
   const showingEditor = isNew || editing;
@@ -274,24 +288,65 @@ export default function SettingsPage() {
 
               {/* Column Mapping */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-700 mb-3">
-                  컬럼 매핑
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {Object.keys(FIELD_LABELS).map((field) => (
-                    <div key={field}>
-                      <label className="block text-xs text-slate-500 mb-1">
-                        {FIELD_LABELS[field]}
-                      </label>
-                      <input
-                        type="text"
-                        value={editConfig.columns[field] || ""}
-                        onChange={(e) => updateColumn(field, e.target.value)}
-                        maxLength={2}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-center font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-slate-700">
+                    컬럼 매핑
+                  </label>
+                  <button
+                    onClick={addColumn}
+                    className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium"
+                  >
+                    + 컬럼 추가
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {Object.entries(editConfig.columns).map(
+                    ([field, col], idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2"
+                      >
+                        <input
+                          type="text"
+                          value={field}
+                          onChange={(e) =>
+                            updateColumnKey(field, e.target.value)
+                          }
+                          placeholder="필드명"
+                          className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-slate-400 text-sm">→</span>
+                        <input
+                          type="text"
+                          value={col}
+                          onChange={(e) =>
+                            updateColumnValue(field, e.target.value)
+                          }
+                          maxLength={2}
+                          placeholder="열"
+                          className="w-16 px-3 py-2 border border-slate-300 rounded-lg text-sm text-center font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={() => removeColumn(field)}
+                          className="p-2 text-slate-400 hover:text-red-500"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
 

@@ -55,7 +55,7 @@ export function getDb(): Database.Database {
       db.prepare(
         "INSERT INTO presets (name, config, is_default) VALUES (?, ?, 1)"
       ).run(
-        "기본",
+        "초과근무 신청서",
         JSON.stringify({
           columns: {
             이름: "C",
