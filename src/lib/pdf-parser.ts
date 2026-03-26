@@ -154,9 +154,9 @@ function extractOvertimeRows(
     entries.push({
       name,
       workPeriod: fullPeriod,
-      workHours: round2(workHours),
-      recognizedHours: round2(recognizedHours),
-      recognizedDays: round2(recognizedDays),
+      workHours: round3(workHours),
+      recognizedHours: round3(recognizedHours),
+      recognizedDays: round3(recognizedDays),
       applicationDate,
       approvalDate,
       workContent: workContent.trim(),
@@ -167,8 +167,8 @@ function extractOvertimeRows(
   return { entries, skippedLines };
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
 }
 
 /**
