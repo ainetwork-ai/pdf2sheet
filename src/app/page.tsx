@@ -18,6 +18,7 @@ interface OvertimeEntry {
   applicationDate: string;
   approvalDate: string;
   workContent: string;
+  warnings: string[];
 }
 
 interface ParsedResult {
@@ -417,37 +418,52 @@ export default function Home() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {result.entries?.map((entry, i) => (
-                          <tr key={i} className="hover:bg-slate-50">
-                            <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
-                              {entry.name}
-                            </td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
-                              {entry.workPeriod}
-                            </td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
-                              {entry.workHours}
-                            </td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
-                              {entry.recognizedHours}
-                            </td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
-                              {entry.recognizedDays}
-                            </td>
-                            <td className="px-3 py-2 text-slate-300">-</td>
-                            <td className="px-3 py-2 text-slate-300">-</td>
-                            <td className="px-3 py-2 text-slate-300">-</td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
-                              {entry.applicationDate}
-                            </td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
-                              {entry.approvalDate || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-slate-600">
-                              {entry.workContent}
-                            </td>
-                          </tr>
-                        ))}
+                        {result.entries?.map((entry, i) => {
+                          const hasWarning = entry.warnings?.length > 0;
+                          return (
+                            <tr
+                              key={i}
+                              className={
+                                hasWarning
+                                  ? "bg-red-50 hover:bg-red-100"
+                                  : "hover:bg-slate-50"
+                              }
+                            >
+                              <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
+                                {entry.name}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 whitespace-pre-line">
+                                {entry.workPeriod}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                                {entry.workHours}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                                {entry.recognizedHours}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                                {entry.recognizedDays}
+                              </td>
+                              <td className="px-3 py-2 text-slate-300">-</td>
+                              <td className="px-3 py-2 text-slate-300">-</td>
+                              <td className="px-3 py-2 text-slate-300">-</td>
+                              <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                                {entry.applicationDate}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                                {entry.approvalDate || "-"}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600">
+                                {entry.workContent}
+                                {hasWarning && (
+                                  <div className="mt-1 text-xs text-red-600 font-medium">
+                                    {entry.warnings.join(", ")}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

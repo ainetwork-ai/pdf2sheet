@@ -12,6 +12,7 @@ export interface OvertimeEntry {
   applicationDate: string;
   approvalDate: string;
   workContent: string;
+  warnings: string[];
 }
 
 export interface ParsedResult {
@@ -42,19 +43,13 @@ async function extractText(filePath: string): Promise<string> {
 function parseOvertimeDocument(text: string): ParsedResult {
   const lines = text.split("\n").map((l) => l.trim());
 
-  // 1. Extract applicant name
   const applicantName = extractField(lines, /성명\s+(\S+)/);
   if (!applicantName) {
     throw new Error("신청자 성명을 찾을 수 없습니다.");
   }
 
-  // 2. Extract application date from header line "2026-206 2026. 3. 23 (월) 오후 10:57 작성"
   const applicationDate = extractApplicationDate(lines);
-
-  // 3. Extract approval date from "Common Computer님이 승인했어요. 2026. 3. 20 (금) 오후 12:32"
   const approvalDate = extractApprovalDate(lines);
-
-  // 4. Extract overtime table rows
   const entries = extractOvertimeRows(lines, applicantName, applicationDate, approvalDate);
 
   return { entries, applicantName, applicationDate, approvalDate };
@@ -70,14 +65,10 @@ function extractField(lines: string[], pattern: RegExp): string | null {
 
 function extractApplicationDate(lines: string[]): string {
   for (const line of lines) {
-    // Match pattern like "2026. 3. 23 (월)" or "2026. 3. 23(월)"
     const match = line.match(
-      /(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*\([월화수목금토일]\)/
+      /(\d{4}\.\s*\d{1,2}\.\s*\d{1,2})\s*\([월화수목금토일]\)/
     );
-    if (match) {
-      const [, year, month, day] = match;
-      return `${year}.${month.padStart(2, "0")}.${day.padStart(2, "0")}`;
-    }
+    if (match) return match[1].replace(/\s+/g, " ");
   }
   return "";
 }
@@ -85,12 +76,9 @@ function extractApplicationDate(lines: string[]): string {
 function extractApprovalDate(lines: string[]): string {
   for (const line of lines) {
     const match = line.match(
-      /승인했어요\.\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*\([월화수목금토일]\)/
+      /승인했어요\.\s*(\d{4}\.\s*\d{1,2}\.\s*\d{1,2})\s*\([월화수목금토일]\)/
     );
-    if (match) {
-      const [, year, month, day] = match;
-      return `${year}.${month.padStart(2, "0")}.${day.padStart(2, "0")}`;
-    }
+    if (match) return match[1].replace(/\s+/g, " ");
   }
   return "";
 }
@@ -103,8 +91,6 @@ function extractOvertimeRows(
 ): OvertimeEntry[] {
   const entries: OvertimeEntry[] = [];
 
-  // Find table data lines: starts with a number (1, 2, 3...) followed by date pattern
-  // Hours format: "5.5", "1h", "4:10", "1h40"
   for (let i = 0; i < lines.length; i++) {
     const match = lines[i].match(
       /^\s*(\d+)\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/
@@ -113,35 +99,48 @@ function extractOvertimeRows(
 
     const [, , periodRaw, workContent, hoursStr] = match;
 
-    // Skip template/empty rows (dates like "2026.00.00")
     if (periodRaw.includes(".00.00")) continue;
 
-    // Check if next line is a continuation of work period (multi-line period)
-    let fullPeriod = periodRaw;
+    // Check next line for continuation (multi-line period → 1 cell with newline)
+    let fullPeriod = periodRaw.replace(/\s+/g, "");
     const nextLine = i + 1 < lines.length ? lines[i + 1] : "";
     const contMatch = nextLine.match(
-      /^\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s*$/
+      /^\s*([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s*$/
     );
     if (contMatch) {
-      fullPeriod = periodRaw + "\n" + contMatch[1];
-      i++; // skip next line
+      fullPeriod = fullPeriod + "\n" + contMatch[1].replace(/\s+/g, "");
+      i++;
     }
 
+    const warnings: string[] = [];
     const workHours = parseWorkHours(hoursStr);
-    if (workHours <= 0) continue;
+
+    if (workHours <= 0) {
+      warnings.push(`근무시간 파싱 실패: "${hoursStr}"`);
+    }
+    if (!workContent.trim()) {
+      warnings.push("근무내용 없음");
+    }
+    if (!applicationDate) {
+      warnings.push("신청일을 찾을 수 없음");
+    }
+    if (!approvalDate) {
+      warnings.push("승인일을 찾을 수 없음");
+    }
 
     const recognizedHours = workHours * 1.5;
     const recognizedDays = recognizedHours / 8;
 
     entries.push({
       name,
-      workPeriod: fullPeriod.replace(/\s+/g, ""),
+      workPeriod: fullPeriod,
       workHours: round2(workHours),
       recognizedHours: round2(recognizedHours),
       recognizedDays: round2(recognizedDays),
       applicationDate,
       approvalDate,
       workContent: workContent.trim(),
+      warnings,
     });
   }
 
@@ -159,46 +158,36 @@ function round2(n: number): number {
 function parseWorkHours(raw: string): number {
   const s = raw.trim();
 
-  // "1h40" (hours h minutes)
   const hm = s.match(/^(\d+)h(\d+)$/);
   if (hm) {
     return (parseInt(hm[1], 10) || 0) + (parseInt(hm[2], 10) || 0) / 60;
   }
 
-  // "1h" or "2.5h"
   if (s.endsWith("h")) {
     return parseFloat(s.slice(0, -1)) || 0;
   }
 
-  // "4:10" (hours:minutes)
   if (s.includes(":")) {
     const [h, m] = s.split(":");
     return (parseInt(h, 10) || 0) + (parseInt(m, 10) || 0) / 60;
   }
 
-  // "5.5" (decimal)
   return parseFloat(s) || 0;
 }
 
-/**
- * Convert OvertimeEntry to sheet data split by ranges.
- * C~G: 이름, 초과근무일시, 초과시간, 인정시간, 인정일수
- * H(보상), I(지급여부), J(지급일), L(승인일) → 건드리지 않음
- * K: 신청일, M: 근무내용
- */
 export function toSheetData(entry: OvertimeEntry) {
   return {
-    coreData: [                                   // C:G
-      entry.name,                                 // C: 이름
-      entry.workPeriod,                           // D: 초과근무일시
-      String(entry.workHours),                    // E: 초과시간
-      String(entry.recognizedHours),              // F: 인정시간
-      String(entry.recognizedDays),               // G: 인정일수
+    coreData: [
+      entry.name,
+      entry.workPeriod,
+      String(entry.workHours),
+      String(entry.recognizedHours),
+      String(entry.recognizedDays),
     ],
-    dateData: [                                   // K:L
-      entry.applicationDate,                      // K: 신청일
-      entry.approvalDate,                         // L: 승인일
+    dateData: [
+      entry.applicationDate,
+      entry.approvalDate,
     ],
-    workContent: [entry.workContent],             // M: 근무내용
+    workContent: [entry.workContent],
   };
 }
