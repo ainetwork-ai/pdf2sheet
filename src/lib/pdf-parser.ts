@@ -104,10 +104,10 @@ function extractOvertimeRows(
   const entries: OvertimeEntry[] = [];
 
   // Find table data lines: starts with a number (1, 2, 3...) followed by date pattern
-  // Hours format: "5.5" (decimal), "1h" (with suffix), "4:10" (hours:minutes)
-  for (const line of lines) {
-    const match = line.match(
-      /^\s*(\d+)\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s+(.*?)\s+([\d.:]+h?)\s*$/
+  // Hours format: "5.5", "1h", "4:10", "1h40"
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(
+      /^\s*(\d+)\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/
     );
     if (!match) continue;
 
@@ -115,6 +115,17 @@ function extractOvertimeRows(
 
     // Skip template/empty rows (dates like "2026.00.00")
     if (periodRaw.includes(".00.00")) continue;
+
+    // Check if next line is a continuation of work period (multi-line period)
+    let fullPeriod = periodRaw;
+    const nextLine = i + 1 < lines.length ? lines[i + 1] : "";
+    const contMatch = nextLine.match(
+      /^\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s*$/
+    );
+    if (contMatch) {
+      fullPeriod = periodRaw + "\n" + contMatch[1];
+      i++; // skip next line
+    }
 
     const workHours = parseWorkHours(hoursStr);
     if (workHours <= 0) continue;
@@ -124,7 +135,7 @@ function extractOvertimeRows(
 
     entries.push({
       name,
-      workPeriod: periodRaw.replace(/\s+/g, ""),
+      workPeriod: fullPeriod.replace(/\s+/g, ""),
       workHours: round2(workHours),
       recognizedHours: round2(recognizedHours),
       recognizedDays: round2(recognizedDays),
@@ -143,10 +154,16 @@ function round2(n: number): number {
 
 /**
  * Parse work hours from various formats:
- * "5.5" → 5.5, "1h" → 1, "4:10" → 4.1667
+ * "5.5" → 5.5, "1h" → 1, "4:10" → 4.17, "1h40" → 1.67
  */
 function parseWorkHours(raw: string): number {
   const s = raw.trim();
+
+  // "1h40" (hours h minutes)
+  const hm = s.match(/^(\d+)h(\d+)$/);
+  if (hm) {
+    return (parseInt(hm[1], 10) || 0) + (parseInt(hm[2], 10) || 0) / 60;
+  }
 
   // "1h" or "2.5h"
   if (s.endsWith("h")) {
