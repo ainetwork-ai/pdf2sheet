@@ -66,14 +66,15 @@ echo [3/4] 의존성 설치 중...
 cd /d "%~dp0"
 call npm install
 
-:: 4. 바탕화면에 PDF2Sheet.bat 복사
+:: 4. 바탕화면에 바로가기 생성 (프로젝트 폴더의 PDF2Sheet.bat을 실행)
 set "DESKTOP_BAT=%USERPROFILE%\Desktop\PDF2Sheet.bat"
-if not exist "!DESKTOP_BAT!" (
-    copy "%~dp0PDF2Sheet.bat" "!DESKTOP_BAT!" >nul
-    echo [4/4] 바탕화면에 PDF2Sheet.bat 생성됨
-) else (
-    echo [4/4] 바탕화면에 PDF2Sheet.bat 이미 존재
-)
+set "PROJECT_DIR=%~dp0"
+(
+    echo @echo off
+    echo cd /d "%PROJECT_DIR%"
+    echo call "%PROJECT_DIR%PDF2Sheet.bat"
+) > "!DESKTOP_BAT!"
+echo [4/4] 바탕화면에 PDF2Sheet 바로가기 생성됨
 
 :: 5. 환경 설정 확인
 if not exist "%~dp0service-account-key.json" (
