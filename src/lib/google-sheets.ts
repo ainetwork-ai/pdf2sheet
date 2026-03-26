@@ -129,20 +129,3 @@ export async function writeToSheet(
   };
 }
 
-export async function getSheetInfo(spreadsheetId: string) {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: "v4", auth });
-
-  const response = await sheets.spreadsheets.get({
-    spreadsheetId,
-  });
-
-  return {
-    title: response.data.properties?.title || "",
-    sheets:
-      response.data.sheets?.map((s) => ({
-        title: s.properties?.title || "",
-        sheetId: s.properties?.sheetId || 0,
-      })) || [],
-  };
-}
