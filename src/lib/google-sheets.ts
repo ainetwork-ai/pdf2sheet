@@ -16,39 +16,17 @@ export function extractSpreadsheetId(input: string): string {
   return trimmed.split(/[/?#]/)[0];
 }
 
+const KEY_FILE = path.join(process.cwd(), "service-account-key.json");
+
 function getAuth() {
-  const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE || "service-account-key.json";
-
-  if (keyFilePath) {
-    const resolved = path.isAbsolute(keyFilePath)
-      ? keyFilePath
-      : path.join(process.cwd(), keyFilePath);
-
-    if (!fs.existsSync(resolved)) {
-      throw new Error(`Service Account 키 파일을 찾을 수 없습니다: ${resolved}`);
-    }
-
-    return new google.auth.GoogleAuth({
-      keyFile: resolved,
-      scopes: SCOPES,
-    });
-  }
-
-  // Fallback: env variables
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-  if (!clientEmail || !privateKey) {
+  if (!fs.existsSync(KEY_FILE)) {
     throw new Error(
-      "Google 인증 미설정. GOOGLE_SERVICE_ACCOUNT_KEY_FILE 또는 GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY를 .env.local에 설정하세요."
+      "service-account-key.json 파일을 프로젝트 루트에 넣어주세요."
     );
   }
 
   return new google.auth.GoogleAuth({
-    credentials: {
-      client_email: clientEmail,
-      private_key: privateKey,
-    },
+    keyFile: KEY_FILE,
     scopes: SCOPES,
   });
 }
