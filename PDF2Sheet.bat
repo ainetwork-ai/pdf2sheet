@@ -1,11 +1,12 @@
 @echo off
 chcp 65001 >nul
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 :: poppler PATH 확인
 where pdftotext >nul 2>&1
-if %errorlevel% neq 0 (
-    for /d %%i in ("%USERPROFILE%\poppler\poppler-*") do set PATH=%PATH%;%%i\Library\bin
+if !errorlevel! neq 0 (
+    for /d %%i in ("%USERPROFILE%\poppler\poppler-*") do set "PATH=!PATH!;%%i\Library\bin"
 )
 
 :: 첫 실행 시 의존성 설치
