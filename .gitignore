@@ -47,4 +47,3 @@ service-account-key.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-*.app
