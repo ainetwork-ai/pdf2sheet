@@ -44,6 +44,12 @@ yarn-error.log*
 service-account-key.json
 *.json.bak
 
+# pdf files (contain personal info)
+*.pdf
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+AGENTS.md
+CLAUDE.md
