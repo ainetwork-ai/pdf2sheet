@@ -281,7 +281,7 @@ export default function SettingsPage() {
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="예: 26년 3월"
+                  placeholder="예: 초과근무 신청서"
                   className="w-full max-w-xs px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
