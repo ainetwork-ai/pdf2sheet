@@ -75,13 +75,17 @@ if [[ ! -f "$INSTALL_DIR/.env.local" ]]; then
   echo "GOOGLE_SERVICE_ACCOUNT_KEY_FILE=service-account-key.json" > "$INSTALL_DIR/.env.local"
 fi
 
-echo ""
-echo "========================================="
-echo "  설치 완료! 앱을 시작합니다..."
-echo "========================================="
-echo ""
-echo "  브라우저에서 http://localhost:3000 을 열어주세요."
-echo "  종료하려면 Ctrl+C 를 누르세요."
-echo ""
+# 바탕화면에 바로가기 생성
+if [[ ! -f "$HOME/Desktop/PDF2Sheet.command" ]]; then
+  ln -s "$INSTALL_DIR/PDF2Sheet.command" "$HOME/Desktop/PDF2Sheet.command"
+  echo "[5/5] 바탕화면에 PDF2Sheet 바로가기 생성됨"
+fi
 
-npm run dev
+echo ""
+echo "========================================="
+echo "  설치 완료!"
+echo "========================================="
+echo ""
+echo "  바탕화면의 PDF2Sheet 아이콘을 더블클릭하세요."
+echo "  브라우저가 자동으로 열립니다."
+echo ""
