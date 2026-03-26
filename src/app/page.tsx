@@ -115,7 +115,6 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error);
 
       setFiles((prev) => [...prev, ...data.files]);
-      setParsedResults([]);
       showMessage("success", `${data.files.length}개 파일 업로드 완료`);
     } catch (err) {
       showMessage(
@@ -152,7 +151,7 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setParsedResults(data.results);
+      setParsedResults((prev) => [...prev, ...data.results]);
       setFiles((prev) =>
         prev.map((f) =>
           uploadedIds.includes(f.id) ? { ...f, status: "parsed" } : f

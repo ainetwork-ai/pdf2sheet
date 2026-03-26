@@ -92,8 +92,9 @@ function extractOvertimeRows(
   const entries: OvertimeEntry[] = [];
 
   for (let i = 0; i < lines.length; i++) {
+    // Match: number, date-range (with or without dots/spaces before parens), content, hours
     const match = lines[i].match(
-      /^\s*(\d+)\s+([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/
+      /^\s*(\d+)\s+([\d.]+\.?\s*\([^)]*\)~[\d.]+\.?\s*\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/
     );
     if (!match) continue;
 
@@ -105,7 +106,7 @@ function extractOvertimeRows(
     let fullPeriod = periodRaw.replace(/\s+/g, "");
     const nextLine = i + 1 < lines.length ? lines[i + 1] : "";
     const contMatch = nextLine.match(
-      /^\s*([\d.]+\.\s*\([^)]*\)~[\d.]+\([^)]*\))\s*$/
+      /^\s*([\d.]+\.?\s*\([^)]*\)~[\d.]+\.?\s*\([^)]*\))\s*$/
     );
     if (contMatch) {
       fullPeriod = fullPeriod + "\n" + contMatch[1].replace(/\s+/g, "");
