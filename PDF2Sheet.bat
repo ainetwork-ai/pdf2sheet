@@ -3,6 +3,10 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
+:: 최신 버전 업데이트
+echo 업데이트 확인 중...
+git pull origin main >nul 2>&1
+
 :: poppler PATH 확인
 where pdftotext >nul 2>&1
 if !errorlevel! neq 0 (
