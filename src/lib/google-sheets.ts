@@ -17,7 +17,7 @@ export function extractSpreadsheetId(input: string): string {
 }
 
 function getAuth() {
-  const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE;
+  const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE || "service-account-key.json";
 
   if (keyFilePath) {
     const resolved = path.isAbsolute(keyFilePath)
