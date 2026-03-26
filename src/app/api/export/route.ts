@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFileById, updateFileStatus, getAllFiles } from "@/lib/db";
+import { getFileById, updateFileStatus, getAllFiles, getPresetById, getDefaultPreset, PresetConfig } from "@/lib/db";
 import { findFirstEmptyRow, writeToSheet, extractSpreadsheetId } from "@/lib/google-sheets";
-import { OvertimeEntry, toSheetData } from "@/lib/pdf-parser";
+import { OvertimeEntry } from "@/lib/pdf-parser";
 import { unlink } from "fs/promises";
 
 async function cleanupAllFiles() {
@@ -18,11 +18,13 @@ async function cleanupAllFiles() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { fileIds, spreadsheetId, sheetName } = (await request.json()) as {
-      fileIds: number[];
-      spreadsheetId: string;
-      sheetName: string;
-    };
+    const { fileIds, spreadsheetId, sheetName, presetId } =
+      (await request.json()) as {
+        fileIds: number[];
+        spreadsheetId: string;
+        sheetName: string;
+        presetId?: number;
+      };
 
     if (!spreadsheetId || !sheetName) {
       return NextResponse.json(
@@ -38,6 +40,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Load preset
+    const preset = presetId
+      ? getPresetById(presetId)
+      : getDefaultPreset();
+
+    if (!preset) {
+      return NextResponse.json(
+        { error: "프리셋을 찾을 수 없습니다." },
+        { status: 400 }
+      );
+    }
+
+    const presetConfig = JSON.parse(preset.config) as PresetConfig;
     const sheetId = extractSpreadsheetId(spreadsheetId);
 
     // Collect all entries from parsed files
@@ -58,24 +73,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find first empty row (min row 5, check C column)
-    const startRow = await findFirstEmptyRow(sheetId, sheetName);
+    // Find first empty row using preset config
+    const startRow = await findFirstEmptyRow(sheetId, sheetName, presetConfig);
 
-    // Build split data (C~G, K~L, M — skip H,I,J)
-    const coreRows: string[][] = [];
-    const dateRows: string[][] = [];
-    const contentRows: string[][] = [];
+    // Build entry records for dynamic column mapping
+    const entryRecords = allEntries.map((e) => ({
+      name: e.name,
+      workPeriod: e.workPeriod,
+      workHours: String(e.workHours),
+      recognizedHours: String(e.recognizedHours),
+      recognizedDays: String(e.recognizedDays),
+      applicationDate: e.applicationDate,
+      approvalDate: e.approvalDate,
+      workContent: e.workContent,
+    }));
 
-    for (const entry of allEntries) {
-      const data = toSheetData(entry);
-      coreRows.push(data.coreData);
-      dateRows.push(data.dateData);
-      contentRows.push(data.workContent);
-    }
-
-    // Write to Google Sheet at the found row
+    // Write to Google Sheet using preset column mapping
     const result = await writeToSheet(
-      sheetId, sheetName, startRow, coreRows, dateRows, contentRows
+      sheetId,
+      sheetName,
+      startRow,
+      entryRecords,
+      presetConfig
     );
 
     return NextResponse.json({
@@ -92,7 +111,6 @@ export async function POST(request: NextRequest) {
         : "Google Sheets 내보내기에 실패했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });
   } finally {
-    // Always clean up: delete all uploaded PDF files regardless of success/failure
     await cleanupAllFiles();
   }
 }

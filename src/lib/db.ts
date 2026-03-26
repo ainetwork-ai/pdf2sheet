@@ -36,9 +36,99 @@ export function getDb(): Database.Database {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS presets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        config TEXT NOT NULL,
+        is_default INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Insert default preset if none exists
+    const count = db
+      .prepare("SELECT COUNT(*) as cnt FROM presets")
+      .get() as { cnt: number };
+    if (count.cnt === 0) {
+      db.prepare(
+        "INSERT INTO presets (name, config, is_default) VALUES (?, ?, 1)"
+      ).run(
+        "기본",
+        JSON.stringify({
+          columns: {
+            이름: "C",
+            초과근무일시: "D",
+            초과시간: "E",
+            인정시간: "F",
+            인정일수: "G",
+            신청일: "K",
+            승인일: "L",
+            근무내용: "M",
+          },
+          startRow: 5,
+          emptyCheckColumn: "C",
+        })
+      );
+    }
   }
   return db;
 }
+
+// ---- Preset CRUD ----
+
+export interface Preset {
+  id: number;
+  name: string;
+  config: string;
+  is_default: number;
+  created_at: string;
+}
+
+export interface PresetConfig {
+  columns: Record<string, string>;
+  startRow: number;
+  emptyCheckColumn: string;
+}
+
+export function getAllPresets(): Preset[] {
+  const db = getDb();
+  return db.prepare("SELECT * FROM presets ORDER BY is_default DESC, name ASC").all() as Preset[];
+}
+
+export function getPresetById(id: number): Preset | undefined {
+  const db = getDb();
+  return db.prepare("SELECT * FROM presets WHERE id = ?").get(id) as Preset | undefined;
+}
+
+export function getDefaultPreset(): Preset | undefined {
+  const db = getDb();
+  return db.prepare("SELECT * FROM presets WHERE is_default = 1").get() as Preset | undefined;
+}
+
+export function createPreset(name: string, config: PresetConfig) {
+  const db = getDb();
+  return db.prepare("INSERT INTO presets (name, config) VALUES (?, ?)").run(name, JSON.stringify(config));
+}
+
+export function updatePreset(id: number, name: string, config: PresetConfig) {
+  const db = getDb();
+  db.prepare("UPDATE presets SET name = ?, config = ? WHERE id = ?").run(name, JSON.stringify(config), id);
+}
+
+export function deletePreset(id: number) {
+  const db = getDb();
+  db.prepare("DELETE FROM presets WHERE id = ?").run(id);
+}
+
+export function setDefaultPreset(id: number) {
+  const db = getDb();
+  db.prepare("UPDATE presets SET is_default = 0").run();
+  db.prepare("UPDATE presets SET is_default = 1 WHERE id = ?").run(id);
+}
+
+// ---- File CRUD ----
 
 export function insertFile(
   filename: string,

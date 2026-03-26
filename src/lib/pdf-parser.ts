@@ -175,19 +175,3 @@ function parseWorkHours(raw: string): number {
   return parseFloat(s) || 0;
 }
 
-export function toSheetData(entry: OvertimeEntry) {
-  return {
-    coreData: [
-      entry.name,
-      entry.workPeriod,
-      String(entry.workHours),
-      String(entry.recognizedHours),
-      String(entry.recognizedDays),
-    ],
-    dateData: [
-      entry.applicationDate,
-      entry.approvalDate,
-    ],
-    workContent: [entry.workContent],
-  };
-}

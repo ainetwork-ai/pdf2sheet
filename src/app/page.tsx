@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import Link from "next/link";
 
 interface UploadedFile {
   id: number;
@@ -31,6 +32,19 @@ interface ParsedResult {
   error?: string;
 }
 
+interface PresetConfig {
+  columns: Record<string, string>;
+  startRow: number;
+  emptyCheckColumn: string;
+}
+
+interface Preset {
+  id: number;
+  name: string;
+  config: PresetConfig;
+  is_default: number;
+}
+
 const SHEET_COLUMNS = [
   "이름",
   "초과근무일시",
@@ -50,6 +64,18 @@ export default function Home() {
   const [parsedResults, setParsedResults] = useState<ParsedResult[]>([]);
   const [spreadsheetId, setSpreadsheetId] = useState("");
   const [sheetName, setSheetName] = useState("26년");
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/presets")
+      .then((r) => r.json())
+      .then((data) => {
+        setPresets(data.presets || []);
+        const def = data.presets?.find((p: Preset) => p.is_default === 1);
+        if (def) setSelectedPresetId(def.id);
+      });
+  }, []);
 
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -163,6 +189,7 @@ export default function Home() {
           fileIds: parsedIds,
           spreadsheetId: spreadsheetId.trim(),
           sheetName: sheetName.trim() || "26년",
+          presetId: selectedPresetId,
         }),
       });
       const data = await res.json();
@@ -215,11 +242,19 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">PDF2Sheet</h1>
-          <p className="text-slate-500 mt-1">
-            초과근무 신청서 PDF를 Google Sheets로 내보내기
-          </p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">PDF2Sheet</h1>
+            <p className="text-slate-500 mt-1">
+              초과근무 신청서 PDF를 Google Sheets로 내보내기
+            </p>
+          </div>
+          <Link
+            href="/settings"
+            className="px-4 py-2 text-sm text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+          >
+            컬럼 설정
+          </Link>
         </div>
 
         {/* Message */}
@@ -508,10 +543,41 @@ export default function Home() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    컬럼 프리셋
+                  </label>
+                  <select
+                    value={selectedPresetId || ""}
+                    onChange={(e) => setSelectedPresetId(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    {presets.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                        {p.is_default === 1 ? " (기본)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="mb-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
-                5행부터 C열(이름)이 비어있는 첫 번째 행에 데이터가 입력됩니다.
-              </div>
+              {selectedPresetId && (
+                <div className="mb-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
+                  {(() => {
+                    const p = presets.find((p) => p.id === selectedPresetId);
+                    if (!p) return null;
+                    return (
+                      <>
+                        {p.config.startRow}행부터 {p.config.emptyCheckColumn}열 기준 빈 행 탐색 |{" "}
+                        {Object.entries(p.config.columns)
+                          .sort(([, a], [, b]) => a.localeCompare(b))
+                          .map(([k, v]) => `${v}:${k}`)
+                          .join(", ")}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
               <button
                 onClick={handleExport}
                 disabled={exporting || !spreadsheetId.trim()}

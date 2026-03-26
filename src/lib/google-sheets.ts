@@ -1,18 +1,14 @@
 import { google } from "googleapis";
 import fs from "fs";
 import path from "path";
+import { PresetConfig } from "./db";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
-/**
- * Extract spreadsheet ID from a full URL or raw ID.
- * Handles: full URL, /d/ID/edit..., or just the ID itself.
- */
 export function extractSpreadsheetId(input: string): string {
   const trimmed = input.trim();
   const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
-  // Already a plain ID (no slashes)
   return trimmed.split(/[/?#]/)[0];
 }
 
@@ -31,79 +27,107 @@ function getAuth() {
   });
 }
 
-const MIN_DATA_ROW = 5;
-
 /**
- * Find the first empty row by checking column B (이름) from row 5 onwards.
- * Rows where only 인정시간/인정일수 have "0" are treated as empty.
+ * Find the first empty row using preset config.
  */
 export async function findFirstEmptyRow(
   spreadsheetId: string,
-  sheetName: string
+  sheetName: string,
+  preset: PresetConfig
 ): Promise<number> {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
+  const col = preset.emptyCheckColumn;
+  const startRow = preset.startRow;
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${sheetName}!C${MIN_DATA_ROW}:C`,
+    range: `${sheetName}!${col}${startRow}:${col}`,
   });
 
   const values = response.data.values;
-  if (!values || values.length === 0) return MIN_DATA_ROW;
+  if (!values || values.length === 0) return startRow;
 
   for (let i = 0; i < values.length; i++) {
     const cell = values[i][0];
     if (!cell || cell.toString().trim() === "") {
-      return MIN_DATA_ROW + i;
+      return startRow + i;
     }
   }
 
-  // All rows have data, append after last
-  return MIN_DATA_ROW + values.length;
+  return startRow + values.length;
 }
 
+// Field name → entry property mapping
+const FIELD_KEY_MAP: Record<string, string> = {
+  이름: "name",
+  초과근무일시: "workPeriod",
+  초과시간: "workHours",
+  인정시간: "recognizedHours",
+  인정일수: "recognizedDays",
+  신청일: "applicationDate",
+  승인일: "approvalDate",
+  근무내용: "workContent",
+};
+
 /**
- * Write data to specific rows, skipping H(보상), I(지급여부), J(지급일), L(승인일).
- * Writes: C~G (core data), K (신청일), M (근무내용)
+ * Write data to sheet using dynamic column mapping from preset.
+ * Groups adjacent columns into ranges for efficiency.
  */
 export async function writeToSheet(
   spreadsheetId: string,
   sheetName: string,
   startRow: number,
-  coreRows: string[][],
-  dateRows: string[][],
-  contentRows: string[][]
+  entries: Record<string, string>[],
+  preset: PresetConfig
 ) {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
-  const endRow = startRow + coreRows.length - 1;
+  // Sort columns by letter
+  const sortedFields = Object.entries(preset.columns)
+    .map(([field, col]) => ({ field, col: col.toUpperCase() }))
+    .sort((a, b) => a.col.localeCompare(b.col));
+
+  // Group adjacent columns into ranges
+  const groups: { startCol: string; fields: string[] }[] = [];
+  for (const { field, col } of sortedFields) {
+    const last = groups[groups.length - 1];
+    if (last && nextCol(last.startCol, last.fields.length) === col) {
+      last.fields.push(field);
+    } else {
+      groups.push({ startCol: col, fields: [field] });
+    }
+  }
+
+  const endRow = startRow + entries.length - 1;
+
+  const data = groups.map((g) => {
+    const endCol = nextCol(g.startCol, g.fields.length - 1);
+    return {
+      range: `${sheetName}!${g.startCol}${startRow}:${endCol}${endRow}`,
+      values: entries.map((entry) =>
+        g.fields.map((f) => entry[FIELD_KEY_MAP[f] || f] || "")
+      ),
+    };
+  });
 
   const response = await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
     requestBody: {
       valueInputOption: "USER_ENTERED",
-      data: [
-        {
-          range: `${sheetName}!C${startRow}:G${endRow}`,
-          values: coreRows,
-        },
-        {
-          range: `${sheetName}!K${startRow}:L${endRow}`,
-          values: dateRows,
-        },
-        {
-          range: `${sheetName}!M${startRow}:M${endRow}`,
-          values: contentRows,
-        },
-      ],
+      data,
     },
   });
 
   return {
     updatedRows: response.data.totalUpdatedRows || 0,
-    updatedRange: `${sheetName}!C${startRow}:M${endRow}`,
+    updatedRange: `${sheetName}!${sortedFields[0].col}${startRow}:${sortedFields[sortedFields.length - 1].col}${endRow}`,
   };
 }
 
+/** Get the column letter offset by n (e.g. "C", 2 → "E") */
+function nextCol(start: string, n: number): string {
+  const code = start.charCodeAt(0) + n;
+  return String.fromCharCode(code);
+}
