@@ -50,16 +50,14 @@ async function extractText(filePath: string): Promise<string> {
 function parseOvertimeDocument(text: string, documentNumber: string): ParsedResult {
   const lines = text.split("\n").map((l) => l.trim());
 
-  const applicantName = extractField(lines, /성명\s+(\S+)/);
-  if (!applicantName) {
-    throw new Error("신청자 성명을 찾을 수 없습니다.");
-  }
+  const applicantName = extractField(lines, /성명\s+(\S+)/) || "";
 
   const applicationDate = extractApplicationDate(lines);
   const { entries, skippedLines } = extractOvertimeRows(lines, applicantName, applicationDate, documentNumber);
 
   const warnings: string[] = [];
   if (!documentNumber) warnings.push("문서번호를 파일명에서 찾을 수 없습니다.");
+  if (!applicantName) warnings.push("신청자 성명을 찾을 수 없습니다.");
   if (!applicationDate) warnings.push("신청일을 찾을 수 없습니다.");
   if (skippedLines.length > 0) {
     warnings.push(
