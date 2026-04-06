@@ -1,10 +1,7 @@
-import Database from "better-sqlite3";
-import path from "path";
 import fs from "fs";
+import path from "path";
 
-const DB_PATH = path.join(process.cwd(), "data", "pdf2sheet.db");
-
-let db: Database.Database | null = null;
+// ---- Types ----
 
 export interface PdfFile {
   id: number;
@@ -17,66 +14,6 @@ export interface PdfFile {
   created_at: string;
   updated_at: string;
 }
-
-export function getDb(): Database.Database {
-  if (!db) {
-    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS pdf_files (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        filename TEXT NOT NULL,
-        original_name TEXT NOT NULL,
-        file_path TEXT NOT NULL,
-        file_size INTEGER NOT NULL,
-        status TEXT DEFAULT 'uploaded',
-        parsed_data TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS presets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        config TEXT NOT NULL,
-        is_default INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Insert default preset if none exists
-    const count = db
-      .prepare("SELECT COUNT(*) as cnt FROM presets")
-      .get() as { cnt: number };
-    if (count.cnt === 0) {
-      db.prepare(
-        "INSERT INTO presets (name, config, is_default) VALUES (?, ?, 1)"
-      ).run(
-        "초과근무 신청서",
-        JSON.stringify({
-          columns: {
-            이름: "C",
-            초과근무일시: "D",
-            초과시간: "E",
-            인정시간: "F",
-            인정일수: "G",
-            신청일: "K",
-            승인일: "L",
-            근무내용: "M",
-          },
-          startRow: 5,
-          emptyCheckColumn: "C",
-        })
-      );
-    }
-  }
-  return db;
-}
-
-// ---- Preset CRUD ----
 
 export interface Preset {
   id: number;
@@ -92,43 +29,10 @@ export interface PresetConfig {
   emptyCheckColumn: string;
 }
 
-export function getAllPresets(): Preset[] {
-  const db = getDb();
-  return db.prepare("SELECT * FROM presets ORDER BY is_default DESC, name ASC").all() as Preset[];
-}
+// ---- In-memory file store ----
 
-export function getPresetById(id: number): Preset | undefined {
-  const db = getDb();
-  return db.prepare("SELECT * FROM presets WHERE id = ?").get(id) as Preset | undefined;
-}
-
-export function getDefaultPreset(): Preset | undefined {
-  const db = getDb();
-  return db.prepare("SELECT * FROM presets WHERE is_default = 1").get() as Preset | undefined;
-}
-
-export function createPreset(name: string, config: PresetConfig) {
-  const db = getDb();
-  return db.prepare("INSERT INTO presets (name, config) VALUES (?, ?)").run(name, JSON.stringify(config));
-}
-
-export function updatePreset(id: number, name: string, config: PresetConfig) {
-  const db = getDb();
-  db.prepare("UPDATE presets SET name = ?, config = ? WHERE id = ?").run(name, JSON.stringify(config), id);
-}
-
-export function deletePreset(id: number) {
-  const db = getDb();
-  db.prepare("DELETE FROM presets WHERE id = ?").run(id);
-}
-
-export function setDefaultPreset(id: number) {
-  const db = getDb();
-  db.prepare("UPDATE presets SET is_default = 0").run();
-  db.prepare("UPDATE presets SET is_default = 1 WHERE id = ?").run(id);
-}
-
-// ---- File CRUD ----
+const files = new Map<number, PdfFile>();
+let fileIdCounter = 0;
 
 export function insertFile(
   filename: string,
@@ -136,25 +40,30 @@ export function insertFile(
   filePath: string,
   fileSize: number
 ) {
-  const db = getDb();
-  const stmt = db.prepare(
-    `INSERT INTO pdf_files (filename, original_name, file_path, file_size) VALUES (?, ?, ?, ?)`
-  );
-  return stmt.run(filename, originalName, filePath, fileSize);
+  const id = ++fileIdCounter;
+  const now = new Date().toISOString();
+  files.set(id, {
+    id,
+    filename,
+    original_name: originalName,
+    file_path: filePath,
+    file_size: fileSize,
+    status: "uploaded",
+    parsed_data: null,
+    created_at: now,
+    updated_at: now,
+  });
+  return { lastInsertRowid: id };
 }
 
 export function getFileById(id: number): PdfFile | undefined {
-  const db = getDb();
-  return db.prepare("SELECT * FROM pdf_files WHERE id = ?").get(id) as
-    | PdfFile
-    | undefined;
+  return files.get(id);
 }
 
 export function getAllFiles(): PdfFile[] {
-  const db = getDb();
-  return db
-    .prepare("SELECT * FROM pdf_files ORDER BY created_at DESC")
-    .all() as PdfFile[];
+  return Array.from(files.values()).sort(
+    (a, b) => b.created_at.localeCompare(a.created_at)
+  );
 }
 
 export function updateFileStatus(
@@ -162,19 +71,107 @@ export function updateFileStatus(
   status: string,
   parsedData?: string
 ) {
-  const db = getDb();
-  if (parsedData !== undefined) {
-    db.prepare(
-      "UPDATE pdf_files SET status = ?, parsed_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(status, parsedData, id);
-  } else {
-    db.prepare(
-      "UPDATE pdf_files SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(status, id);
-  }
+  const file = files.get(id);
+  if (!file) return;
+  file.status = status as PdfFile["status"];
+  file.updated_at = new Date().toISOString();
+  if (parsedData !== undefined) file.parsed_data = parsedData;
 }
 
 export function deleteFile(id: number) {
-  const db = getDb();
-  db.prepare("DELETE FROM pdf_files WHERE id = ?").run(id);
+  files.delete(id);
+}
+
+// ---- Preset store (JSON file for persistence) ----
+
+const PRESETS_PATH = path.join(process.cwd(), "presets.json");
+
+const DEFAULT_PRESET: Omit<Preset, "id"> = {
+  name: "초과근무 신청서",
+  config: JSON.stringify({
+    columns: {
+      이름: "C",
+      초과근무일시: "D",
+      초과시간: "E",
+      인정시간: "F",
+      인정일수: "G",
+      신청일: "K",
+      승인일: "L",
+      근무내용: "M",
+    },
+    startRow: 5,
+    emptyCheckColumn: "C",
+  }),
+  is_default: 1,
+  created_at: new Date().toISOString(),
+};
+
+function loadPresets(): Preset[] {
+  try {
+    if (fs.existsSync(PRESETS_PATH)) {
+      return JSON.parse(fs.readFileSync(PRESETS_PATH, "utf-8"));
+    }
+  } catch {
+    // Corrupted file, reset
+  }
+  const initial = [{ ...DEFAULT_PRESET, id: 1 }];
+  savePresets(initial);
+  return initial;
+}
+
+function savePresets(presets: Preset[]) {
+  fs.writeFileSync(PRESETS_PATH, JSON.stringify(presets, null, 2), "utf-8");
+}
+
+function nextPresetId(presets: Preset[]): number {
+  return presets.length === 0 ? 1 : Math.max(...presets.map((p) => p.id)) + 1;
+}
+
+export function getAllPresets(): Preset[] {
+  return loadPresets().sort(
+    (a, b) => b.is_default - a.is_default || a.name.localeCompare(b.name)
+  );
+}
+
+export function getPresetById(id: number): Preset | undefined {
+  return loadPresets().find((p) => p.id === id);
+}
+
+export function getDefaultPreset(): Preset | undefined {
+  return loadPresets().find((p) => p.is_default === 1);
+}
+
+export function createPreset(name: string, config: PresetConfig) {
+  const presets = loadPresets();
+  presets.push({
+    id: nextPresetId(presets),
+    name,
+    config: JSON.stringify(config),
+    is_default: 0,
+    created_at: new Date().toISOString(),
+  });
+  savePresets(presets);
+}
+
+export function updatePreset(id: number, name: string, config: PresetConfig) {
+  const presets = loadPresets();
+  const p = presets.find((p) => p.id === id);
+  if (p) {
+    p.name = name;
+    p.config = JSON.stringify(config);
+    savePresets(presets);
+  }
+}
+
+export function deletePreset(id: number) {
+  const presets = loadPresets().filter((p) => p.id !== id);
+  savePresets(presets);
+}
+
+export function setDefaultPreset(id: number) {
+  const presets = loadPresets();
+  for (const p of presets) {
+    p.is_default = p.id === id ? 1 : 0;
+  }
+  savePresets(presets);
 }
