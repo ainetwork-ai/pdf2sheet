@@ -48,7 +48,8 @@ async function extractText(filePath: string): Promise<string> {
 }
 
 function parseOvertimeDocument(text: string, documentNumber: string): ParsedResult {
-  const lines = text.split("\n").map((l) => l.trim());
+  // Remove form feed characters (page breaks) and split
+  const lines = text.replace(/\f/g, "\n").split("\n").map((l) => l.trim());
 
   const applicantName = extractField(lines, /성명\s+(\S+)/) || "";
 
@@ -95,27 +96,62 @@ function extractOvertimeRows(
   const entries: OvertimeEntry[] = [];
   const skippedLines: string[] = [];
 
+  // Detect potential table rows: starts with number + date pattern
   const rowCandidate = /^\s*(\d+)\s+\d{4}\./;
+
+  // Full match: number, date-range, content, hours (all on one line)
   const fullMatch =
-    /^\s*(\d+)\s+([\d.]+\.?\s*\([^)]*\)~[\d.]+\.?\s*\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/;
+    /^\s*(\d+)\s+([\d.]+\.?\s*\([^)]*\)~[\d.]*\.?\s*\([^)]*\))\s+(.*?)\s+([\d.:]+h?\d*)\s*$/;
+
+  // Partial match: number, date-range, content but NO hours at end
+  const partialMatch =
+    /^\s*(\d+)\s+([\d.]+\.?\s*\([^)]*\)~[\d.]*\.?\s*\([^)]*\))\s+(.+?)\s*$/;
 
   for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(fullMatch);
-    if (!match) {
-      if (rowCandidate.test(lines[i]) && !lines[i].includes(".00.00")) {
-        skippedLines.push(lines[i]);
-      }
-      continue;
-    }
+    let periodRaw: string;
+    let workContent: string;
+    let hoursStr: string;
 
-    const [, , periodRaw, workContent, hoursStr] = match;
+    const full = lines[i].match(fullMatch);
+    if (full) {
+      [, , periodRaw, workContent, hoursStr] = full;
+    } else {
+      // Try partial match (hours might be on next line or missing)
+      const partial = lines[i].match(partialMatch);
+      if (!partial) {
+        if (rowCandidate.test(lines[i]) && !lines[i].includes(".00.00")) {
+          skippedLines.push(lines[i]);
+        }
+        continue;
+      }
+
+      [, , periodRaw, workContent] = partial;
+
+      // Check next line for hours
+      const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : "";
+      const hoursOnNext = nextLine.match(/^([\d.:]+h?\d*)\s*$/);
+      if (hoursOnNext) {
+        hoursStr = hoursOnNext[1];
+        i++;
+      } else {
+        // Try to extract hours from end of workContent
+        const trailingHours = workContent.match(/\s+([\d.:]+h?\d*)$/);
+        if (trailingHours) {
+          hoursStr = trailingHours[1];
+          workContent = workContent.slice(0, -trailingHours[0].length);
+        } else {
+          hoursStr = "";
+        }
+      }
+    }
 
     if (periodRaw.includes(".00.00")) continue;
 
+    // Check next line for continuation period (multi-line period → 1 cell)
     let fullPeriod = periodRaw.replace(/\s+/g, "");
-    const nextLine = i + 1 < lines.length ? lines[i + 1] : "";
+    const nextLine = i + 1 < lines.length ? lines[i + 1].trim() : "";
     const contMatch = nextLine.match(
-      /^\s*([\d.]+\.?\s*\([^)]*\)~[\d.]+\.?\s*\([^)]*\))\s*$/
+      /^([\d.]+\.?\s*\([^)]*\)~[\d.]*\.?\s*\([^)]*\))\s*$/
     );
     if (contMatch) {
       fullPeriod = fullPeriod + "\n" + contMatch[1].replace(/\s+/g, "");
@@ -126,7 +162,7 @@ function extractOvertimeRows(
     const workHours = parseWorkHours(hoursStr);
 
     if (workHours <= 0) {
-      warnings.push(`근무시간 파싱 실패: "${hoursStr}"`);
+      warnings.push(`근무시간 파싱 실패: "${hoursStr || "(없음)"}"`);
     }
     if (!workContent.trim()) {
       warnings.push("근무내용 없음");
