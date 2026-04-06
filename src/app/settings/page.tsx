@@ -2,8 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import RuleBuilder from "./rule-builder";
+
+interface ExtractionConfig {
+  fields: { name: string; keyword: string; direction: "right" | "below"; pattern?: string }[];
+  table: {
+    headerKeywords: string[];
+    columns: { name: string; keyword: string; type: "text" | "number" | "date" | "hours" }[];
+    rowPattern?: string;
+  };
+}
 
 interface PresetConfig {
+  extraction?: ExtractionConfig;
   columns: Record<string, string>;
   startRow: number;
   emptyCheckColumn: string;
@@ -17,9 +28,24 @@ interface Preset {
 }
 
 const DEFAULT_CONFIG: PresetConfig = {
+  extraction: {
+    fields: [
+      { name: "성명", keyword: "성명", direction: "right" as const },
+      { name: "신청일", keyword: "신청일", direction: "right" as const, pattern: "\\d{4}\\.\\s*\\d{1,2}\\.\\s*\\d{1,2}" },
+    ],
+    table: {
+      headerKeywords: ["근무기간", "근무내용", "초과근무시간"],
+      columns: [
+        { name: "근무기간", keyword: "근무기간", type: "date" as const },
+        { name: "근무내용", keyword: "근무내용", type: "text" as const },
+        { name: "초과시간", keyword: "초과근무시간", type: "hours" as const },
+      ],
+      rowPattern: "^\\d+\\s+",
+    },
+  },
   columns: {
     문서번호: "A",
-    이름: "B",
+    성명: "B",
     초과근무일시: "C",
     초과시간: "D",
     인정시간: "E",
@@ -37,6 +63,7 @@ export default function SettingsPage() {
   const [editName, setEditName] = useState("");
   const [editConfig, setEditConfig] = useState<PresetConfig>(DEFAULT_CONFIG);
   const [isNew, setIsNew] = useState(false);
+  const [activeTab, setActiveTab] = useState<"extraction" | "mapping">("extraction");
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -87,6 +114,7 @@ export default function SettingsPage() {
     setEditName(preset.name);
     setEditConfig({ ...preset.config });
     setIsNew(false);
+    setActiveTab("extraction");
   };
 
   const startNew = () => {
@@ -94,6 +122,7 @@ export default function SettingsPage() {
     setEditName("");
     setEditConfig({ ...DEFAULT_CONFIG });
     setIsNew(true);
+    setActiveTab("extraction");
   };
 
   const handleSave = async () => {
@@ -286,134 +315,172 @@ export default function SettingsPage() {
                 />
               </div>
 
-              {/* Column Mapping */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-slate-700">
-                    컬럼 매핑
-                  </label>
-                  <button
-                    onClick={addColumn}
-                    className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium"
-                  >
-                    + 컬럼 추가
-                  </button>
+              {/* Tabs */}
+              <div className="flex gap-1 mb-4 border-b border-slate-200">
+                <button
+                  onClick={() => setActiveTab("extraction")}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                    activeTab === "extraction"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  추출 룰
+                </button>
+                <button
+                  onClick={() => setActiveTab("mapping")}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                    activeTab === "mapping"
+                      ? "border-blue-600 text-blue-600"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  시트 매핑
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              {activeTab === "extraction" && (
+                <div className="mb-6">
+                  <RuleBuilder
+                    extraction={editConfig.extraction || { fields: [], table: { headerKeywords: [], columns: [] } }}
+                    onChange={(extraction) => setEditConfig((prev) => ({ ...prev, extraction }))}
+                  />
                 </div>
-                <div className="space-y-2">
-                  {Object.entries(editConfig.columns).map(
-                    ([field, col], idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2"
+              )}
+
+              {activeTab === "mapping" && (
+                <>
+                  {/* Column Mapping */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-slate-700">
+                        컬럼 매핑
+                      </label>
+                      <button
+                        onClick={addColumn}
+                        className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium"
                       >
-                        <input
-                          type="text"
-                          value={field}
-                          onChange={(e) =>
-                            updateColumnKey(field, e.target.value)
-                          }
-                          placeholder="필드명"
-                          className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span className="text-slate-400 text-sm">→</span>
-                        <input
-                          type="text"
-                          value={col}
-                          onChange={(e) =>
-                            updateColumnValue(field, e.target.value)
-                          }
-                          maxLength={2}
-                          placeholder="열"
-                          className="w-16 px-3 py-2 border border-slate-300 rounded-lg text-sm text-center font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <button
-                          onClick={() => removeColumn(field)}
-                          className="p-2 text-slate-400 hover:text-red-500"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
+                        + 컬럼 추가
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {Object.entries(editConfig.columns).map(
+                        ([field, col], idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2"
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
+                            <input
+                              type="text"
+                              value={field}
+                              onChange={(e) =>
+                                updateColumnKey(field, e.target.value)
+                              }
+                              placeholder="필드명"
+                              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
-                          </svg>
-                        </button>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
+                            <span className="text-slate-400 text-sm">→</span>
+                            <input
+                              type="text"
+                              value={col}
+                              onChange={(e) =>
+                                updateColumnValue(field, e.target.value)
+                              }
+                              maxLength={2}
+                              placeholder="열"
+                              className="w-16 px-3 py-2 border border-slate-300 rounded-lg text-sm text-center font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button
+                              onClick={() => removeColumn(field)}
+                              className="p-2 text-slate-400 hover:text-red-500"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
 
-              {/* Start Row & Check Column */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    시작 행
-                  </label>
-                  <input
-                    type="number"
-                    value={editConfig.startRow}
-                    onChange={(e) =>
-                      setEditConfig((prev) => ({
-                        ...prev,
-                        startRow: parseInt(e.target.value) || 1,
-                      }))
-                    }
-                    min={1}
-                    className="w-full max-w-[100px] px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    이 행부터 빈 행을 찾아 데이터 입력
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    빈 행 확인 컬럼
-                  </label>
-                  <input
-                    type="text"
-                    value={editConfig.emptyCheckColumn}
-                    onChange={(e) =>
-                      setEditConfig((prev) => ({
-                        ...prev,
-                        emptyCheckColumn: e.target.value.toUpperCase(),
-                      }))
-                    }
-                    maxLength={2}
-                    className="w-full max-w-[100px] px-3 py-2 border border-slate-300 rounded-lg text-sm text-center font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    이 컬럼이 비어있으면 빈 행으로 판단
-                  </p>
-                </div>
-              </div>
+                  {/* Start Row & Check Column */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        시작 행
+                      </label>
+                      <input
+                        type="number"
+                        value={editConfig.startRow}
+                        onChange={(e) =>
+                          setEditConfig((prev) => ({
+                            ...prev,
+                            startRow: parseInt(e.target.value) || 1,
+                          }))
+                        }
+                        min={1}
+                        className="w-full max-w-[100px] px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-xs text-slate-400 mt-1">
+                        이 행부터 빈 행을 찾아 데이터 입력
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        빈 행 확인 컬럼
+                      </label>
+                      <input
+                        type="text"
+                        value={editConfig.emptyCheckColumn}
+                        onChange={(e) =>
+                          setEditConfig((prev) => ({
+                            ...prev,
+                            emptyCheckColumn: e.target.value.toUpperCase(),
+                          }))
+                        }
+                        maxLength={2}
+                        className="w-full max-w-[100px] px-3 py-2 border border-slate-300 rounded-lg text-sm text-center font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-xs text-slate-400 mt-1">
+                        이 컬럼이 비어있으면 빈 행으로 판단
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Preview */}
-              <div className="mb-6 p-4 bg-slate-50 rounded-lg">
-                <p className="text-xs font-medium text-slate-500 mb-2">
-                  미리보기
-                </p>
-                <div className="flex flex-wrap gap-1 text-xs font-mono">
-                  {Object.entries(editConfig.columns)
-                    .sort(([, a], [, b]) => a.localeCompare(b))
-                    .map(([field, col]) => (
-                      <span
-                        key={field}
-                        className="px-2 py-1 bg-white border border-slate-200 rounded"
-                      >
-                        <span className="text-blue-600">{col}</span>
-                        <span className="text-slate-400">:</span>
-                        <span className="text-slate-700">{field}</span>
-                      </span>
-                    ))}
-                </div>
-              </div>
+                  {/* Preview */}
+                  <div className="mb-6 p-4 bg-slate-50 rounded-lg">
+                    <p className="text-xs font-medium text-slate-500 mb-2">
+                      미리보기
+                    </p>
+                    <div className="flex flex-wrap gap-1 text-xs font-mono">
+                      {Object.entries(editConfig.columns)
+                        .sort(([, a], [, b]) => a.localeCompare(b))
+                        .map(([field, col]) => (
+                          <span
+                            key={field}
+                            className="px-2 py-1 bg-white border border-slate-200 rounded"
+                          >
+                            <span className="text-blue-600">{col}</span>
+                            <span className="text-slate-400">:</span>
+                            <span className="text-slate-700">{field}</span>
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Actions */}
               <div className="flex gap-3">
