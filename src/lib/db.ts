@@ -24,9 +24,34 @@ export interface Preset {
 }
 
 export interface PresetConfig {
+  extraction?: ExtractionConfig;
   columns: Record<string, string>;
   startRow: number;
   emptyCheckColumn: string;
+}
+
+export interface ExtractionConfig {
+  fields: FieldRule[];
+  table: TableRule;
+}
+
+export interface FieldRule {
+  name: string;
+  keyword: string;
+  direction: "right" | "below";
+  pattern?: string;
+}
+
+export interface TableRule {
+  headerKeywords: string[];
+  columns: TableColumnRule[];
+  rowPattern?: string;
+}
+
+export interface TableColumnRule {
+  name: string;
+  keyword: string;
+  type: "text" | "number" | "date" | "hours";
 }
 
 // ---- In-memory file store ----
@@ -89,9 +114,29 @@ const PRESETS_PATH = path.join(process.cwd(), "presets.json");
 const DEFAULT_PRESET: Omit<Preset, "id"> = {
   name: "초과근무 신청서",
   config: JSON.stringify({
+    extraction: {
+      fields: [
+        { name: "성명", keyword: "성명", direction: "right" },
+        {
+          name: "신청일",
+          keyword: "신청일",
+          direction: "right",
+          pattern: "\\d{4}\\.\\s*\\d{1,2}\\.\\s*\\d{1,2}",
+        },
+      ],
+      table: {
+        headerKeywords: ["근무기간", "근무내용", "초과근무시간"],
+        columns: [
+          { name: "근무기간", keyword: "근무기간", type: "date" },
+          { name: "근무내용", keyword: "근무내용", type: "text" },
+          { name: "초과시간", keyword: "초과근무시간", type: "hours" },
+        ],
+        rowPattern: "^\\d+\\s+",
+      },
+    },
     columns: {
       문서번호: "A",
-      이름: "B",
+      성명: "B",
       초과근무일시: "C",
       초과시간: "D",
       인정시간: "E",
@@ -129,7 +174,8 @@ function loadPresets(): Preset[] {
     const expected = JSON.parse(DEFAULT_PRESET.config) as PresetConfig;
     const currentKeys = Object.keys(current.columns).sort().join(",");
     const expectedKeys = Object.keys(expected.columns).sort().join(",");
-    if (currentKeys !== expectedKeys) {
+    const hasExtraction = !!current.extraction;
+    if (currentKeys !== expectedKeys || !hasExtraction) {
       presets[defaultIdx].config = DEFAULT_PRESET.config;
       savePresets(presets);
     }
