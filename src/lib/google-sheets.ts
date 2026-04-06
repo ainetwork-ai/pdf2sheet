@@ -66,7 +66,6 @@ const FIELD_KEY_MAP: Record<string, string> = {
   인정시간: "recognizedHours",
   인정일수: "recognizedDays",
   신청일: "applicationDate",
-  승인일: "approvalDate",
   근무내용: "workContent",
 };
 

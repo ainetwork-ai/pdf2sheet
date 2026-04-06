@@ -24,7 +24,6 @@ const DEFAULT_CONFIG: PresetConfig = {
     인정시간: "F",
     인정일수: "G",
     신청일: "K",
-    승인일: "L",
     근무내용: "M",
   },
   startRow: 5,

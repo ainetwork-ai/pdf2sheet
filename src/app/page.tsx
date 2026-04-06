@@ -17,7 +17,6 @@ interface OvertimeEntry {
   recognizedHours: number;
   recognizedDays: number;
   applicationDate: string;
-  approvalDate: string;
   workContent: string;
   warnings: string[];
 }
@@ -56,7 +55,6 @@ const SHEET_COLUMNS = [
   "지급여부",
   "지급일",
   "신청일",
-  "승인일",
   "근무내용",
 ];
 
@@ -505,9 +503,6 @@ export default function Home() {
                               <td className="px-3 py-2 text-slate-300">-</td>
                               <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
                                 {entry.applicationDate}
-                              </td>
-                              <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
-                                {entry.approvalDate || "-"}
                               </td>
                               <td className="px-3 py-2 text-slate-600">
                                 {entry.workContent}

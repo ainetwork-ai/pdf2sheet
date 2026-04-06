@@ -84,7 +84,6 @@ export async function POST(request: NextRequest) {
       recognizedHours: String(e.recognizedHours),
       recognizedDays: String(e.recognizedDays),
       applicationDate: e.applicationDate,
-      approvalDate: e.approvalDate,
       workContent: e.workContent,
     }));
 
