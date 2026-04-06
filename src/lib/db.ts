@@ -107,16 +107,35 @@ const DEFAULT_PRESET: Omit<Preset, "id"> = {
 };
 
 function loadPresets(): Preset[] {
+  let presets: Preset[];
   try {
     if (fs.existsSync(PRESETS_PATH)) {
-      return JSON.parse(fs.readFileSync(PRESETS_PATH, "utf-8"));
+      presets = JSON.parse(fs.readFileSync(PRESETS_PATH, "utf-8"));
+    } else {
+      presets = [{ ...DEFAULT_PRESET, id: 1 }];
+      savePresets(presets);
+      return presets;
     }
   } catch {
-    // Corrupted file, reset
+    presets = [{ ...DEFAULT_PRESET, id: 1 }];
+    savePresets(presets);
+    return presets;
   }
-  const initial = [{ ...DEFAULT_PRESET, id: 1 }];
-  savePresets(initial);
-  return initial;
+
+  // Auto-migrate: update default preset if schema changed
+  const defaultIdx = presets.findIndex((p) => p.is_default === 1);
+  if (defaultIdx >= 0) {
+    const current = JSON.parse(presets[defaultIdx].config) as PresetConfig;
+    const expected = JSON.parse(DEFAULT_PRESET.config) as PresetConfig;
+    const currentKeys = Object.keys(current.columns).sort().join(",");
+    const expectedKeys = Object.keys(expected.columns).sort().join(",");
+    if (currentKeys !== expectedKeys) {
+      presets[defaultIdx].config = DEFAULT_PRESET.config;
+      savePresets(presets);
+    }
+  }
+
+  return presets;
 }
 
 function savePresets(presets: Preset[]) {
