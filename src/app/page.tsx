@@ -11,6 +11,7 @@ interface UploadedFile {
 }
 
 interface OvertimeEntry {
+  documentNumber: string;
   name: string;
   workPeriod: string;
   workHours: number;
@@ -46,6 +47,7 @@ interface Preset {
 }
 
 const SHEET_COLUMNS = [
+  "문서번호",
   "이름",
   "초과근무일시",
   "초과시간",
@@ -483,6 +485,9 @@ export default function Home() {
                                   : "hover:bg-slate-50"
                               }
                             >
+                              <td className="px-3 py-2 text-slate-600 whitespace-nowrap font-mono text-xs">
+                                {entry.documentNumber}
+                              </td>
                               <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
                                 {entry.name}
                               </td>

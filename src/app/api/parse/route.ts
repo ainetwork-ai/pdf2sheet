@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const parsedData = await parsePdfTable(file.file_path);
+        const parsedData = await parsePdfTable(file.file_path, file.original_name);
         updateFileStatus(id, "parsed", JSON.stringify(parsedData));
 
         results.push({

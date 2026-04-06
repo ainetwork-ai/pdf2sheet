@@ -60,6 +60,7 @@ export async function findFirstEmptyRow(
 
 // Field name → entry property mapping
 const FIELD_KEY_MAP: Record<string, string> = {
+  문서번호: "documentNumber",
   이름: "name",
   초과근무일시: "workPeriod",
   초과시간: "workHours",

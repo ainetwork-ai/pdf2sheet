@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Build entry records for dynamic column mapping
     const entryRecords = allEntries.map((e) => ({
+      documentNumber: e.documentNumber,
       name: e.name,
       workPeriod: e.workPeriod,
       workHours: String(e.workHours),

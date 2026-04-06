@@ -4,6 +4,7 @@ import { promisify } from "util";
 const execFileAsync = promisify(execFile);
 
 export interface OvertimeEntry {
+  documentNumber: string;
   name: string;
   workPeriod: string;
   workHours: number;
@@ -16,14 +17,21 @@ export interface OvertimeEntry {
 
 export interface ParsedResult {
   entries: OvertimeEntry[];
+  documentNumber: string;
   applicantName: string;
   applicationDate: string;
   warnings: string[];
 }
 
-export async function parsePdfTable(filePath: string): Promise<ParsedResult> {
+export async function parsePdfTable(filePath: string, originalName: string): Promise<ParsedResult> {
   const text = await extractText(filePath);
-  return parseOvertimeDocument(text);
+  const documentNumber = extractDocumentNumber(originalName);
+  return parseOvertimeDocument(text, documentNumber);
+}
+
+function extractDocumentNumber(filename: string): string {
+  const match = filename.match(/(\d{4}-\d+)/);
+  return match ? match[1] : "";
 }
 
 async function extractText(filePath: string): Promise<string> {
@@ -39,7 +47,7 @@ async function extractText(filePath: string): Promise<string> {
   }
 }
 
-function parseOvertimeDocument(text: string): ParsedResult {
+function parseOvertimeDocument(text: string, documentNumber: string): ParsedResult {
   const lines = text.split("\n").map((l) => l.trim());
 
   const applicantName = extractField(lines, /성명\s+(\S+)/);
@@ -48,9 +56,10 @@ function parseOvertimeDocument(text: string): ParsedResult {
   }
 
   const applicationDate = extractApplicationDate(lines);
-  const { entries, skippedLines } = extractOvertimeRows(lines, applicantName, applicationDate);
+  const { entries, skippedLines } = extractOvertimeRows(lines, applicantName, applicationDate, documentNumber);
 
   const warnings: string[] = [];
+  if (!documentNumber) warnings.push("문서번호를 파일명에서 찾을 수 없습니다.");
   if (!applicationDate) warnings.push("신청일을 찾을 수 없습니다.");
   if (skippedLines.length > 0) {
     warnings.push(
@@ -58,7 +67,7 @@ function parseOvertimeDocument(text: string): ParsedResult {
     );
   }
 
-  return { entries, applicantName, applicationDate, warnings };
+  return { entries, documentNumber, applicantName, applicationDate, warnings };
 }
 
 function extractField(lines: string[], pattern: RegExp): string | null {
@@ -82,7 +91,8 @@ function extractApplicationDate(lines: string[]): string {
 function extractOvertimeRows(
   lines: string[],
   name: string,
-  applicationDate: string
+  applicationDate: string,
+  documentNumber: string
 ): { entries: OvertimeEntry[]; skippedLines: string[] } {
   const entries: OvertimeEntry[] = [];
   const skippedLines: string[] = [];
@@ -131,6 +141,7 @@ function extractOvertimeRows(
     const recognizedDays = recognizedHours / 8;
 
     entries.push({
+      documentNumber,
       name,
       workPeriod: fullPeriod,
       workHours: round3(workHours),

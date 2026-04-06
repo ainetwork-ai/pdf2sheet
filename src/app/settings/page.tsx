@@ -18,16 +18,17 @@ interface Preset {
 
 const DEFAULT_CONFIG: PresetConfig = {
   columns: {
-    이름: "C",
-    초과근무일시: "D",
-    초과시간: "E",
-    인정시간: "F",
-    인정일수: "G",
-    신청일: "K",
-    근무내용: "M",
+    문서번호: "A",
+    이름: "B",
+    초과근무일시: "C",
+    초과시간: "D",
+    인정시간: "E",
+    인정일수: "F",
+    신청일: "J",
+    근무내용: "L",
   },
   startRow: 5,
-  emptyCheckColumn: "C",
+  emptyCheckColumn: "B",
 };
 
 export default function SettingsPage() {
