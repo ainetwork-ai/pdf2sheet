@@ -4,7 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { textToGrid } from "@/lib/text-grid";
+import { parseTsv } from "@/lib/tsv-parser";
 
 const execFileAsync = promisify(execFile);
 
@@ -25,10 +25,10 @@ export async function POST(request: NextRequest) {
     tempPath = join(tmpdir(), `preview-${Date.now()}.pdf`);
     await writeFile(tempPath, Buffer.from(bytes));
 
-    const { stdout } = await execFileAsync("pdftotext", ["-layout", tempPath, "-"]);
-    const grid = textToGrid(stdout);
+    const { stdout } = await execFileAsync("pdftotext", ["-tsv", tempPath, "-"]);
+    const result = parseTsv(stdout);
 
-    return NextResponse.json({ grid, rawText: stdout });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Preview error:", error);
     return NextResponse.json(
