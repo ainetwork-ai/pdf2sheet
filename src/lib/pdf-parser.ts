@@ -1,8 +1,5 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { textToGrid } from "./text-grid";
-import { applyFieldRules, applyTableRule, ExtractionConfig } from "./rule-parser";
-import { PresetConfig } from "./db";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,72 +25,11 @@ export interface ParsedResult {
 
 export async function parsePdfTable(
   filePath: string,
-  originalName: string,
-  presetConfig?: PresetConfig
+  originalName: string
 ): Promise<ParsedResult> {
   const text = await extractText(filePath);
   const documentNumber = extractDocumentNumber(originalName);
-
-  // If preset has extraction rules, use rule-parser
-  if (presetConfig?.extraction) {
-    return parseWithRules(text, documentNumber, presetConfig.extraction);
-  }
-
-  // Otherwise, use existing hardcoded parser (unchanged)
   return parseOvertimeDocument(text, documentNumber);
-}
-
-function parseWithRules(
-  text: string,
-  documentNumber: string,
-  extraction: ExtractionConfig
-): ParsedResult {
-  const grid = textToGrid(text);
-  const warnings: string[] = [];
-
-  const fieldResult = applyFieldRules(grid, extraction.fields);
-  warnings.push(...fieldResult.warnings);
-
-  const fieldMap = new Map(fieldResult.fields.map((f) => [f.name, f.value]));
-  const applicantName = fieldMap.get("성명") || "";
-  const applicationDate = fieldMap.get("신청일") || "";
-
-  const tableResult = applyTableRule(grid, extraction.table);
-  warnings.push(...tableResult.warnings);
-
-  const hoursCol = extraction.table.columns.find((c) => c.type === "hours");
-  const dateCol = extraction.table.columns.find((c) => c.type === "date");
-  const contentCol = extraction.table.columns.find((c) => c.type === "text");
-
-  const entries: OvertimeEntry[] = tableResult.rows.map((row) => {
-    const rawHours = hoursCol ? row[hoursCol.name] || "" : "";
-    const workHours = parseWorkHours(rawHours);
-    const recognizedHours = workHours * 1.5;
-    const recognizedDays = recognizedHours / 8;
-
-    const entryWarnings: string[] = [];
-    if (workHours <= 0) {
-      entryWarnings.push(`근무시간 파싱 실패: "${rawHours || "(없음)"}"`);
-    }
-
-    return {
-      documentNumber,
-      name: applicantName,
-      workPeriod: dateCol ? row[dateCol.name] || "" : "",
-      workHours: round3(workHours),
-      recognizedHours: round3(recognizedHours),
-      recognizedDays: round3(recognizedDays),
-      applicationDate,
-      workContent: contentCol ? row[contentCol.name] || "" : "",
-      warnings: entryWarnings,
-    };
-  });
-
-  if (!documentNumber) warnings.push("문서번호를 파일명에서 찾을 수 없습니다.");
-  if (!applicantName) warnings.push("신청자 성명을 찾을 수 없습니다.");
-  if (!applicationDate) warnings.push("신청일을 찾을 수 없습니다.");
-
-  return { entries, documentNumber, applicantName, applicationDate, warnings };
 }
 
 function extractDocumentNumber(filename: string): string {
