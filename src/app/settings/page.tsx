@@ -5,12 +5,8 @@ import Link from "next/link";
 import RuleBuilder from "./rule-builder";
 
 interface ExtractionConfig {
-  fields: { name: string; keyword: string; direction: "right" | "below"; pattern?: string }[];
-  table: {
-    headerKeywords: string[];
-    columns: { name: string; keyword: string; type: "text" | "number" | "date" | "hours" }[];
-    rowPattern?: string;
-  };
+  fieldMappings: { label: string; sheetColumn: string }[];
+  tableMappings: { header: string; sheetColumn: string }[];
 }
 
 interface PresetConfig {
@@ -29,19 +25,15 @@ interface Preset {
 
 const DEFAULT_CONFIG: PresetConfig = {
   extraction: {
-    fields: [
-      { name: "성명", keyword: "성명", direction: "right" as const },
-      { name: "신청일", keyword: "신청일", direction: "right" as const, pattern: "\\d{4}\\.\\s*\\d{1,2}\\.\\s*\\d{1,2}" },
+    fieldMappings: [
+      { label: "성명", sheetColumn: "B" },
+      { label: "신청일", sheetColumn: "J" },
     ],
-    table: {
-      headerKeywords: ["근무기간", "근무내용", "초과근무시간"],
-      columns: [
-        { name: "근무기간", keyword: "근무기간", type: "date" as const },
-        { name: "근무내용", keyword: "근무내용", type: "text" as const },
-        { name: "초과시간", keyword: "초과근무시간", type: "hours" as const },
-      ],
-      rowPattern: "^\\d+\\s+",
-    },
+    tableMappings: [
+      { header: "근무기간", sheetColumn: "C" },
+      { header: "근무내용", sheetColumn: "L" },
+      { header: "근무시간", sheetColumn: "D" },
+    ],
   },
   columns: {
     문서번호: "A",
@@ -343,7 +335,7 @@ export default function SettingsPage() {
               {activeTab === "extraction" && (
                 <div className="mb-6">
                   <RuleBuilder
-                    extraction={editConfig.extraction || { fields: [], table: { headerKeywords: [], columns: [] } }}
+                    extraction={editConfig.extraction || { fieldMappings: [], tableMappings: [] }}
                     onChange={(extraction) => setEditConfig((prev) => ({ ...prev, extraction }))}
                   />
                 </div>
