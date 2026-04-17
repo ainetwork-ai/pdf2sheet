@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import type { HistorySession, HistorySessionSummary, ParsedResult } from "./shared-types";
 
 // ---- Types ----
 
@@ -213,4 +214,48 @@ export function setDefaultPreset(id: number) {
     p.is_default = p.id === id ? 1 : 0;
   }
   savePresets(presets);
+}
+
+// ---- History store (JSON file for persistence) ----
+
+const HISTORY_PATH = path.join(process.cwd(), "history.json");
+
+function loadHistory(): HistorySession[] {
+  try {
+    if (fs.existsSync(HISTORY_PATH)) {
+      return JSON.parse(fs.readFileSync(HISTORY_PATH, "utf-8"));
+    }
+  } catch {}
+  return [];
+}
+
+function saveHistory(sessions: HistorySession[]) {
+  fs.writeFileSync(HISTORY_PATH, JSON.stringify(sessions, null, 2), "utf-8");
+}
+
+export function appendHistorySession(results: ParsedResult[]): HistorySession {
+  const sessions = loadHistory();
+  const session: HistorySession = {
+    id: String(Date.now()),
+    savedAt: new Date().toISOString(),
+    results,
+  };
+  sessions.push(session);
+  saveHistory(sessions);
+  return session;
+}
+
+export function getAllHistorySessions(): HistorySessionSummary[] {
+  return loadHistory()
+    .map(({ id, savedAt, results }) => ({
+      id,
+      savedAt,
+      fileCount: results.length,
+      hasError: results.some((r) => !!r.error),
+    }))
+    .reverse();
+}
+
+export function getHistorySession(id: string): HistorySession | undefined {
+  return loadHistory().find((s) => s.id === id);
 }
