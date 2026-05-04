@@ -109,7 +109,7 @@ const DEFAULT_PRESET: Omit<Preset, "id"> = {
     },
     columns: {
       문서번호: "A",
-      성명: "B",
+      이름: "B",
       초과근무일시: "C",
       초과시간: "D",
       인정시간: "E",
